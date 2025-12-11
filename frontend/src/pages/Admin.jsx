@@ -1,18 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup,Marker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import axios from 'axios';
 import '../styles/Admin.css';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
 const API_URL = 'http://localhost:5000/api';
-const ADMIN_TOKEN = localStorage.getItem('adminToken') || 'test-token';
+const ADMIN_TOKEN = localStorage.getItem('adminToken');
+
+// FitBounds Component
+function FitBoundsComponent({ stations }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (stations && stations.length > 0) {
+      const bounds = stations.map(s => 
+        [parseFloat(s.latitude), parseFloat(s.longitude)]
+      );
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [stations, map]);
+
+  return null;
+}
 
 function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stations, setStations] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [routes, setRoutes] = useState([]);
+  const [routePolylines, setRoutePolylines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
     totalCost: 0,
@@ -44,6 +61,31 @@ function Admin() {
     }
   };
 
+  const drawRoutesOnMap = (routesList) => {
+    const colors = ['#27ae60', '#e74c3c', '#f39c12', '#3498db', '#9b59b6'];
+    
+    const routeLines = routesList.map((route, idx) => {
+      const coordinates = route.stations.map(stationId => {
+        const station = stations.find(s => s.id === stationId);
+        if (!station) return null;
+        return [parseFloat(station.latitude), parseFloat(station.longitude)];
+      }).filter(c => c !== null);
+      
+      return (
+        <Polyline
+          key={`route-${idx}`}
+          positions={coordinates}
+          color={colors[idx % colors.length]}
+          weight={3}
+          opacity={0.7}
+          dashArray="5, 5"
+        />
+      );
+    });
+    
+    setRoutePolylines(routeLines);
+  };
+
   const calculateRoutes = async () => {
     setLoading(true);
     try {
@@ -58,12 +100,16 @@ function Admin() {
       );
 
       setRoutes(response.data.routes);
-     setStats({
-  totalCost: parseFloat(response.data.totalCost),
-  vehiclesUsed: response.data.vehiclesUsed,
-  totalWeight: response.data.routes.reduce((sum, r) => sum + r.totalWeight, 0),
-  totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
-});
+      setStats({
+        totalCost: parseFloat(response.data.totalCost),
+        vehiclesUsed: response.data.vehiclesUsed,
+        totalWeight: response.data.routes.reduce((sum, r) => sum + r.totalWeight, 0),
+        totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
+      });
+
+      // Rotaları çiz
+      drawRoutesOnMap(response.data.routes);
+
     } catch (error) {
       console.error('Error calculating routes:', error);
       alert('Rota hesaplanırken hata oluştu: ' + error.message);
@@ -125,49 +171,54 @@ function Admin() {
             <h2>📍 Harita Görünümü</h2>
             
             {stations.length > 0 && (
-  <div style={{ 
-    width: '100%',
-    height: '500px', 
-    marginBottom: '30px', 
-    borderRadius: '8px',
-    overflow: 'hidden',
-    position: 'relative',
-    border: '1px solid #ddd'
-  }}>
-    <MapContainer
-      bounds={stations.map(s => [parseFloat(s.latitude), parseFloat(s.longitude)])}
-      style={{ width: '100%', height: '100%' }}
-      className="leaflet-map"
-    >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='© OpenStreetMap contributors'
-      />
-      {stations.map(station => (
-        <Marker
-          key={station.id}
-          position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
-          icon={L.icon({
-            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowSize: [41, 41]
-          })}
-        >
-          <Popup>
-            <strong>{station.name}</strong>
-            <br />
-            Lat: {parseFloat(station.latitude).toFixed(4)}
-            <br />
-            Lon: {parseFloat(station.longitude).toFixed(4)}
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
-  </div>
-)}
+              <div style={{ 
+                width: '100%',
+                height: '500px', 
+                marginBottom: '30px', 
+                borderRadius: '8px',
+                overflow: 'hidden',
+                position: 'relative',
+                border: '1px solid #ddd'
+              }}>
+                <MapContainer
+                  style={{ width: '100%', height: '100%' }}
+                  className="leaflet-map"
+                >
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='© OpenStreetMap contributors'
+                  />
+                  <FitBoundsComponent stations={stations} />
+                  
+                  {/* Rotalar */}
+                  {routePolylines}
+                  
+                  {/* Marker'lar */}
+                  {stations.map(station => (
+                    <Marker
+                      key={station.id}
+                      position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
+                      icon={L.icon({
+                        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                      })}
+                    >
+                      <Popup>
+                        <strong>{station.name}</strong>
+                        <br />
+                        Lat: {parseFloat(station.latitude).toFixed(4)}
+                        <br />
+                        Lon: {parseFloat(station.longitude).toFixed(4)}
+                      </Popup>
+                    </Marker>
+                  ))}
+                </MapContainer>
+              </div>
+            )}
 
             <div className="stats-grid">
               <div className="stat-card">
@@ -180,6 +231,23 @@ function Admin() {
                 <h3>Taşınan Kargo</h3>
                 <div className="stat-value">{stats.totalWeight} kg</div>
                 <div className="stat-sub">Mesafe: {stats.totalDistance.toFixed(2)} km</div>
+              </div>
+
+              <div className="stat-card">
+                <h3>🚚 Araç Kiralama</h3>
+                <p style={{ marginBottom: '15px', color: '#666', fontSize: '14px' }}>
+                  Gerekirse ek araç kiralayabilirsiniz
+                </p>
+                <button 
+                  className="rental-btn"
+                  onClick={() => alert('500 kg kapasiteli araç: 200 TL/gün')}
+                >
+                  + Araç Kirala
+                </button>
+                <div style={{ marginTop: '15px', fontSize: '13px', color: '#666' }}>
+                  Kiralanan: {Math.max(0, stats.vehiclesUsed - 3)}<br />
+                  Maliyet: ₺ {Math.max(0, stats.vehiclesUsed - 3) * 200}
+                </div>
               </div>
             </div>
 

@@ -51,34 +51,38 @@ function User() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      const response = await axios.post(
-        `${API_URL}/cargo/send`,
-        {
-          station_id: parseInt(formData.station_id),
-          cargo_count: parseInt(formData.cargo_count),
-          cargo_weight_kg: parseInt(formData.cargo_weight_kg)
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${USER_TOKEN}`
-          }
+  try {
+    await axios.post(
+      `${API_URL}/cargo/send`,
+      {
+        station_id: parseInt(formData.station_id),
+        cargo_count: parseInt(formData.cargo_count),
+        cargo_weight_kg: parseInt(formData.cargo_weight_kg)
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${USER_TOKEN}`
         }
-      );
+      }
+    );
 
-      alert('Kargo başarıyla gönderildi!');
-      setFormData({ station_id: '', cargo_count: '', cargo_weight_kg: '' });
-      loadMyCargos();
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Kargo gönderilemedi: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    alert('Kargo başarıyla gönderildi!');
+    setFormData({ station_id: '', cargo_count: '', cargo_weight_kg: '' });
+    loadMyCargos();
+    
+    // Listeyi yenile (3. satır olarak)
+    await loadMyCargos();
+    
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Kargo gönderilemedi: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="user-container">
