@@ -6,6 +6,7 @@ const authRoutes =require('./routes/auth')
 const stationRoutes = require('./routes/station');
 const vehicleRoutes = require('./routes/vehicle');
 const cargoRoutes = require('./routes/cargo');
+const routeRoutes = require('./routes/route');
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use('/api/stations', stationRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/cargo', cargoRoutes);
 app.use('/api/admin/stations', stationRoutes); // Admin istasyon ekleme
+app.use('/api/routes', routeRoutes);
 
 // Static dosyalar
 app.use(express.static('public'));
