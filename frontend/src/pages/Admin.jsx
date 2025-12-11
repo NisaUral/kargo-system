@@ -9,18 +9,82 @@ const API_URL = 'http://localhost:5000/api';
 const ADMIN_TOKEN = localStorage.getItem('adminToken');
 
 // FitBounds Component
-function FitBoundsComponent({ stations }) {
+function FitBoundsComponent({ stations, routePolylines }) {
   const map = useMap();
   
   useEffect(() => {
-    if (stations && stations.length > 0) {
-      const bounds = stations.map(s => 
-        [parseFloat(s.latitude), parseFloat(s.longitude)]
-      );
-      map.fitBounds(bounds, { padding: [50, 50] });
+    if (map) {
+      // Eğer rotalar varsa onları göster
+      if (routePolylines && routePolylines.length > 0) {
+        // Tüm polyline'ların boundları hesapla
+        let bounds = null;
+        routePolylines.forEach(poly => {
+          if (poly.positions && poly.positions.length > 0) {
+            poly.positions.forEach(coord => {
+              if (bounds === null) {
+                bounds = L.latLngBounds(coord, coord);
+              } else {
+                bounds.extend(coord);
+              }
+            });
+          }
+        });
+        if (bounds) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+          console.log('Fitted to routes');
+        }
+      } 
+      // Yoksa istasyonları göster
+      else if (stations && stations.length > 0) {
+        const bounds = stations.map(s => 
+          [parseFloat(s.latitude), parseFloat(s.longitude)]
+        );
+        map.fitBounds(bounds, { padding: [50, 50] });
+        console.log('Fitted to stations');
+      }
     }
-  }, [stations, map]);
+  }, [stations, routePolylines, map]);
 
+  return null;
+}
+
+// Route Lines Component
+function RouteLines({ routePolylines }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (routePolylines && routePolylines.length > 0 && map) {
+      console.log('Adding polylines to map:', routePolylines);
+      
+      // Önceki polyline'ları temizle
+      map.eachLayer(layer => {
+        if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+          map.removeLayer(layer);
+        }
+      });
+      
+      // Yeni polyline'ları ekle
+      routePolylines.forEach((poly, idx) => {
+        console.log(`Polyline ${idx}:`, poly);
+        console.log(`Positions:`, JSON.stringify(poly.positions));
+        
+        if (poly.positions && poly.positions.length > 0) {
+          try {
+            const line = L.polyline(poly.positions, {
+              color: poly.color,
+              weight: poly.weight,
+              opacity: poly.opacity,
+              dashArray: poly.dashArray
+            }).addTo(map);
+            console.log(`✅ Polyline ${idx} added`);
+          } catch (e) {
+            console.error(`❌ Error adding polyline ${idx}:`, e);
+          }
+        }
+      });
+    }
+  }, [routePolylines, map]);
+  
   return null;
 }
 
@@ -62,29 +126,33 @@ function Admin() {
   };
 
   const drawRoutesOnMap = (routesList) => {
-    const colors = ['#27ae60', '#e74c3c', '#f39c12', '#3498db', '#9b59b6'];
-    
-    const routeLines = routesList.map((route, idx) => {
-      const coordinates = route.stations.map(stationId => {
+  console.log('Drawing routes with stations:', stations);
+  const colors = ['#27ae60', '#e74c3c', '#f39c12', '#3498db', '#9b59b6'];
+  
+  const routeLines = routesList.map((route, idx) => {
+    const coordinates = route.stations
+      .map(stationId => {
         const station = stations.find(s => s.id === stationId);
         if (!station) return null;
         return [parseFloat(station.latitude), parseFloat(station.longitude)];
-      }).filter(c => c !== null);
-      
-      return (
-        <Polyline
-          key={`route-${idx}`}
-          positions={coordinates}
-          color={colors[idx % colors.length]}
-          weight={3}
-          opacity={0.7}
-          dashArray="5, 5"
-        />
-      );
-    });
+      })
+      .filter(c => c !== null);
     
-    setRoutePolylines(routeLines);
-  };
+    if (coordinates.length === 0) return null;
+    
+    return {
+      positions: coordinates,
+      color: colors[idx % colors.length],
+      weight: 3,
+      opacity: 0.7,
+      dashArray: '5, 5'
+    };
+  })
+  .filter(line => line !== null);
+  
+  console.log('Route lines created:', routeLines.length);
+  setRoutePolylines(routeLines);
+};
 
   const calculateRoutes = async () => {
     setLoading(true);
@@ -99,16 +167,14 @@ function Admin() {
         }
       );
 
+      console.log('Routes response:', response.data);
       setRoutes(response.data.routes);
       setStats({
         totalCost: parseFloat(response.data.totalCost),
         vehiclesUsed: response.data.vehiclesUsed,
-        totalWeight: response.data.routes.reduce((sum, r) => sum + r.totalWeight, 0),
+        totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
         totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
       });
-
-      // Rotaları çiz
-      drawRoutesOnMap(response.data.routes);
 
     } catch (error) {
       console.error('Error calculating routes:', error);
@@ -117,6 +183,21 @@ function Admin() {
       setLoading(false);
     }
   };
+
+  // Routes güncellenince rotaları çiz
+ // Routes güncellenince rotaları çiz
+useEffect(() => {
+  if (routes.length > 0 && stations.length > 0) {
+    console.log('Routes updated, drawing...', routes);
+    
+    // Timeout ekle (re-render olması için)
+    const timer = setTimeout(() => {
+      drawRoutesOnMap(routes);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }
+}, [routes, stations]);
 
   return (
     <div className="admin-container">
@@ -171,30 +252,29 @@ function Admin() {
             <h2>📍 Harita Görünümü</h2>
             
             {stations.length > 0 && (
-              <div style={{ 
-                width: '100%',
-                height: '500px', 
-                marginBottom: '30px', 
-                borderRadius: '8px',
-                overflow: 'hidden',
-                position: 'relative',
-                border: '1px solid #ddd'
-              }}>
-                <MapContainer
-                  style={{ width: '100%', height: '100%' }}
-                  className="leaflet-map"
-                >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='© OpenStreetMap contributors'
-                  />
-                  <FitBoundsComponent stations={stations} />
-                  
-                  {/* Rotalar */}
-                  {routePolylines}
-                  
-                  {/* Marker'lar */}
-                  {stations.map(station => (
+  <div style={{ 
+    width: '100%',
+    height: '500px', 
+    marginBottom: '30px', 
+    borderRadius: '8px',
+    overflow: 'hidden',
+    position: 'relative',
+    border: '1px solid #ddd'
+  }}>
+    <MapContainer
+  key={`map-${routes.length}`}
+  style={{ width: '100%', height: '100%' }}
+  className="leaflet-map"
+>
+  <TileLayer
+    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    attribution='© OpenStreetMap contributors'
+  />
+  <FitBoundsComponent stations={stations} routePolylines={routePolylines} />
+  <RouteLines routePolylines={routePolylines} />
+  
+  {/* Marker'lar */}
+  {stations.map(station => (
                     <Marker
                       key={station.id}
                       position={[parseFloat(station.latitude), parseFloat(station.longitude)]}

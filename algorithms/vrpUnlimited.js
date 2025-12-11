@@ -7,10 +7,9 @@ class UnlimitedVehicleVRP {
     this.cargoByStation = cargoByStation;
     this.costs = costs;
     this.distanceMatrix = createDistanceMatrix(stations);
-    this.university = { latitude: 40.8667, longitude: 29.85 }; // KOU merkez
+    this.university = { latitude: 40.8667, longitude: 29.85 };
   }
 
-  // Üniversiteden istasyona uzaklık
   getDistanceFromUniversity(station) {
     return haversineDistance(
       this.university.latitude,
@@ -21,73 +20,104 @@ class UnlimitedVehicleVRP {
   }
 
   // Nearest Neighbor - En yakın şehri seç
-  nearestNeighborRoute(startStationId, availableStations, vehicle) {
-    const route = [startStationId];
-    const visited = new Set([startStationId]);
-    let totalDistance = 0;
-    let totalWeight = this.cargoByStation[startStationId]?.totalWeight || 0;
+ nearestNeighborRoute(startStationId, availableStations, vehicle) {
+  
+  const route = [startStationId];
+  let totalDistance = 0;
+  let totalWeight = parseInt(this.cargoByStation[startStationId]?.totalWeight) || 0; // ← parseInt EKLE
 
-    while (availableStations.length > 0) {
-      let nearestStation = null;
-      let nearestDistance = Infinity;
-      let nearestIdx = -1;
+  console.log(`[NN] Starting with station ${startStationId}, available: ${availableStations.length}, weight: ${totalWeight}`);
 
-      for (let i = 0; i < availableStations.length; i++) {
-        const stationId = availableStations[i];
-        
-        if (!visited.has(stationId)) {
-          const currentStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
-          const nextStationIdx = this.stations.findIndex(s => s.id === stationId);
-          
-          const distance = this.distanceMatrix[currentStationIdx][nextStationIdx];
-          const cargoWeight = this.cargoByStation[stationId]?.totalWeight || 0;
-          const potentialWeight = totalWeight + cargoWeight;
+  while (availableStations.length > 0) {
+    let nearestStation = null;
+    let nearestDistance = Infinity;
+    let nearestIdx = -1;
+    const currentStationId = route[route.length - 1];
 
-          // Kapasite kontrol
-          if (distance < nearestDistance && potentialWeight <= vehicle.capacity_kg) {
-            nearestDistance = distance;
-            nearestStation = stationId;
-            nearestIdx = i;
-          }
+    // Ziyaret edilmemiş en yakın istasyonu bul
+    for (let i = 0; i < availableStations.length; i++) {
+  const stationId = availableStations[i];
+  
+  // currentStationId ile aynı değilse kontrol et
+  if (stationId === currentStationId) {
+    console.log(`[NN] Skipping current station ${stationId}`);
+    continue;
+  }
+  
+  const currentStationIdx = this.stations.findIndex(s => s.id === currentStationId);
+  const nextStationIdx = this.stations.findIndex(s => s.id === stationId);
+  
+  if (currentStationIdx === -1 || nextStationIdx === -1) {
+    console.log(`[NN] Station not found in distance matrix`);
+    continue;
+  }
+  
+  const distance = this.distanceMatrix[currentStationIdx][nextStationIdx];
+  const cargoWeight = parseInt(this.cargoByStation[stationId]?.totalWeight) || 0;
+  const potentialWeight = totalWeight + cargoWeight;
+
+  console.log(`[NN] Checking station ${stationId}: distance=${distance}, weight=${cargoWeight}, potential=${potentialWeight}, capacity=${vehicle.capacity_kg}`);
+
+  // Kapasite kontrol + mesafe karşılaştırması
+  if (potentialWeight <= vehicle.capacity_kg && distance < nearestDistance) {
+    nearestDistance = distance;
+    nearestStation = stationId;
+    nearestIdx = i;
+    console.log(`[NN] New best: station ${stationId}, distance ${distance}`);
+  }
+}
+
+    // Uygun istasyon bulunamadı
+    if (nearestStation === null) {
+      console.log(`[NN] No more stations can be added. Current route: ${route.length} stations, weight: ${totalWeight}`);
+      
+      // Tüm rotada olan istasyonları availableStations'tan kaldır
+      for (let i = availableStations.length - 1; i >= 0; i--) {
+        if (route.includes(availableStations[i])) {
+          availableStations.splice(i, 1);
         }
       }
-
-      if (nearestStation === null) {
-        break; // Daha fazla istasyon eklenetemez
-      }
-
-      visited.add(nearestStation);
-      route.push(nearestStation);
-      totalDistance += nearestDistance;
-      totalWeight += this.cargoByStation[nearestStation].totalWeight;
-
-      // Kullanılan istasyonu sil
-      availableStations.splice(nearestIdx, 1);
+      break;
     }
 
-    // Üniversiteye dönüş
-    const lastStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
-    const returnDistance = haversineDistance(
-      this.stations[lastStationIdx].latitude,
-      this.stations[lastStationIdx].longitude,
-      this.university.latitude,
-      this.university.longitude
-    );
-    totalDistance += returnDistance;
+    // Yeni istasyonu rotaya ekle
+    route.push(nearestStation);
+    totalDistance += nearestDistance;
+    totalWeight += this.cargoByStation[nearestStation].totalWeight;
 
-    return {
-      stations: route,
-      totalDistance,
-      totalWeight,
-      capacity: vehicle.capacity_kg,
-      utilization: (totalWeight / vehicle.capacity_kg * 100).toFixed(1)
-    };
+    console.log(`[NN] Added station ${nearestStation}, route now: ${route.length} stations, total weight: ${totalWeight}`);
+
+    // availableStations'tan sil
+    availableStations.splice(nearestIdx, 1);
   }
+
+  // Üniversiteye dönüş
+  const lastStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
+  const returnDistance = haversineDistance(
+    this.stations[lastStationIdx].latitude,
+    this.stations[lastStationIdx].longitude,
+    this.university.latitude,
+    this.university.longitude
+  );
+  totalDistance += returnDistance;
+
+  console.log(`[NN] Final route: ${route.join('->')} (${route.length} stations)`);
+
+  return {
+    stations: route,
+    totalDistance,
+    totalWeight,
+    capacity: vehicle.capacity_kg,
+    utilization: (totalWeight / vehicle.capacity_kg * 100).toFixed(1)
+  };
+}
 
   // Ana algoritma
   solve() {
     const availableStations = Object.keys(this.cargoByStation)
       .map(id => parseInt(id));
+
+    console.log(`[SOLVE] Starting VRP with ${availableStations.length} stations`);
 
     let activeVehicleIdx = 0;
     let allRoutes = [];
@@ -98,26 +128,32 @@ class UnlimitedVehicleVRP {
     const vehiclesToUse = [...this.vehicles];
 
     while (availableStations.length > 0) {
+      console.log(`[SOLVE] Loop iteration - Remaining stations: ${availableStations.length}`);
+
       // Yeni araç kiralanması gerekirse
       if (activeVehicleIdx >= vehiclesToUse.length) {
-        vehiclesUsed.push({
+        const newVehicle = {
           id: 100 + newVehiclesRented,
           name: `Kiralandı Araç ${newVehiclesRented + 1}`,
           capacity_kg: this.costs.rental_capacity,
           rental_cost: this.costs.rental_cost_new_vehicle,
           isRented: true
-        });
-        vehiclesToUse.push(vehiclesUsed[vehiclesUsed.length - 1]);
+        };
+        vehiclesUsed.push(newVehicle);
+        vehiclesToUse.push(newVehicle);
         newVehiclesRented++;
+        console.log(`[SOLVE] Rented new vehicle: ${newVehicle.name}`);
       }
 
       const currentVehicle = vehiclesToUse[activeVehicleIdx];
-      const stationsCopy = [...availableStations];
+      const firstStation = availableStations[0];
 
-      // Rota oluştur
+      console.log(`[SOLVE] Using vehicle: ${currentVehicle.name}, capacity: ${currentVehicle.capacity_kg}`);
+
+      // Rota oluştur - orijinal array'ı gönder (splice yapacak)
       const route = this.nearestNeighborRoute(
-        stationsCopy[0],
-        stationsCopy,
+        firstStation,
+        availableStations,
         currentVehicle
       );
 
@@ -142,16 +178,12 @@ class UnlimitedVehicleVRP {
         totalCost: totalRouteCost.toFixed(2)
       });
 
-      // Kullanılan istasyonları kaldır
-      route.stations.forEach(stationId => {
-        const idx = availableStations.indexOf(stationId);
-        if (idx > -1) availableStations.splice(idx, 1);
-      });
-
       totalCost += totalRouteCost;
       vehiclesUsed.push(currentVehicle);
       activeVehicleIdx++;
     }
+
+    console.log(`[SOLVE] Completed! Total routes: ${allRoutes.length}, Total cost: ${totalCost}`);
 
     return {
       routes: allRoutes,
