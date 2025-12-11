@@ -58,12 +58,12 @@ function Admin() {
       );
 
       setRoutes(response.data.routes);
-      setStats({
-        totalCost: response.data.totalCost,
-        vehiclesUsed: response.data.vehiclesUsed,
-        totalWeight: response.data.routes.reduce((sum, r) => sum + r.totalWeight, 0),
-        totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
-      });
+     setStats({
+  totalCost: parseFloat(response.data.totalCost),
+  vehiclesUsed: response.data.vehiclesUsed,
+  totalWeight: response.data.routes.reduce((sum, r) => sum + r.totalWeight, 0),
+  totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
+});
     } catch (error) {
       console.error('Error calculating routes:', error);
       alert('Rota hesaplanırken hata oluştu: ' + error.message);

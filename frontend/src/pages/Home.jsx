@@ -11,7 +11,7 @@ function Home() {
       </div>
 
       <div className="cards">
-        <Link to="/admin" className="card">
+        <Link to="/login?type=admin" className="card">
           <div className="card-content">
             <h2>Admin Paneli</h2>
             <p>Rota planlaması ve yönetim</p>
@@ -19,7 +19,7 @@ function Home() {
           </div>
         </Link>
 
-        <Link to="/user" className="card">
+        <Link to="/login?type=user" className="card">
           <div className="card-content">
             <h2>Kullanıcı Paneli</h2>
             <p>Kargo gönderme ve takip</p>
