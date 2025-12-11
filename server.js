@@ -11,8 +11,10 @@ const routeRoutes = require('./routes/route');
 const app = express();
 
 // Middleware
-app.use(cors());
-app.use(bodyParser.json());
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:5000'],
+  credentials: true
+}));app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth',authRoutes)
