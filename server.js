@@ -3,6 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const authRoutes =require('./routes/auth')
+const stationRoutes = require('./routes/station');
+const vehicleRoutes = require('./routes/vehicle');
+const cargoRoutes = require('./routes/cargo');
 
 const app = express();
 
@@ -10,7 +13,13 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+// Routes
 app.use('/api/auth',authRoutes)
+app.use('/api/auth', authRoutes);
+app.use('/api/stations', stationRoutes);
+app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/cargo', cargoRoutes);
+app.use('/api/admin/stations', stationRoutes); // Admin istasyon ekleme
 
 // Static dosyalar
 app.use(express.static('public'));
