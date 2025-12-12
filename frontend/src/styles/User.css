@@ -148,3 +148,35 @@
   background-color: #d1ecf1;
   color: #0c5460;
 }
+
+.btn-show-route {
+  background-color: #3498db;
+  color: white;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.btn-show-route:hover {
+  background-color: #2980b9;
+}
+
+.route-info {
+  background-color: #f0f0f0;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.route-info h3 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+.route-info p {
+  margin: 5px 0;
+  color: #333;
+}

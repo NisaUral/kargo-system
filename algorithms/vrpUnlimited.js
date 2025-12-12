@@ -138,60 +138,62 @@ route.push(nearestStation);
     const vehiclesToUse = [...this.vehicles];
 
     while (availableStations.length > 0) {
-      console.log(`[SOLVE] Loop iteration - Remaining stations: ${availableStations.length}`);
+  console.log(`[SOLVE] activeVehicleIdx: ${activeVehicleIdx}, vehiclesToUse.length: ${vehiclesToUse.length}`);
+  
+  // Yeni araç kiralanması gerekirse
+  if (activeVehicleIdx >= vehiclesToUse.length) {
+    const newVehicle = {
+      id: 100 + newVehiclesRented,
+      name: `Kiralandı Araç ${newVehiclesRented + 1}`,
+      capacity_kg: this.costs.rental_capacity,
+      rental_cost: this.costs.rental_cost_new_vehicle,
+      isRented: true
+    };
+    vehiclesUsed.push(newVehicle);
+    vehiclesToUse.push(newVehicle);
+    newVehiclesRented++;
+    console.log(`[SOLVE] Rented new vehicle: ${newVehicle.name}`);
+  }
 
-      // Yeni araç kiralanması gerekirse
-      if (activeVehicleIdx >= vehiclesToUse.length) {
-        const newVehicle = {
-          id: 100 + newVehiclesRented,
-          name: `Kiralandı Araç ${newVehiclesRented + 1}`,
-          capacity_kg: this.costs.rental_capacity,
-          rental_cost: this.costs.rental_cost_new_vehicle,
-          isRented: true
-        };
-        vehiclesUsed.push(newVehicle);
-        vehiclesToUse.push(newVehicle);
-        newVehiclesRented++;
-        console.log(`[SOLVE] Rented new vehicle: ${newVehicle.name}`);
-      }
+  const currentVehicle = vehiclesToUse[activeVehicleIdx];
+  console.log(`[SOLVE] Current vehicle: ID=${currentVehicle.id}, Name=${currentVehicle.name}, Capacity=${currentVehicle.capacity_kg}`);
+  
+  const firstStation = availableStations[0];
 
-      const currentVehicle = vehiclesToUse[activeVehicleIdx];
-      const firstStation = availableStations[0];
+  // Rota oluştur
+  const route = this.nearestNeighborRoute(
+    firstStation,
+    availableStations,
+    currentVehicle
+  );
 
-      console.log(`[SOLVE] Using vehicle: ${currentVehicle.name}, capacity: ${currentVehicle.capacity_kg}`);
+  console.log(`[SOLVE] Route created - Weight: ${route.totalWeight}, Stations: ${route.stations.length}`);
 
-      // Rota oluştur - orijinal array'ı gönder (splice yapacak)
-      const route = this.nearestNeighborRoute(
-        firstStation,
-        availableStations,
-        currentVehicle
-      );
+  // Maliyet hesapla
+  const fuelCost = route.totalDistance * this.costs.fuel_price_per_liter;
+  const distanceCost = route.totalDistance * this.costs.km_cost;
+  const rentalCost = currentVehicle.isRented ? this.costs.rental_cost_new_vehicle : 0;
+  const totalRouteCost = fuelCost + distanceCost + rentalCost;
 
-      // Maliyet hesapla
-      const fuelCost = route.totalDistance * this.costs.fuel_price_per_liter;
-      const distanceCost = route.totalDistance * this.costs.km_cost;
-      const rentalCost = currentVehicle.isRented ? this.costs.rental_cost_new_vehicle : 0;
-      const totalRouteCost = fuelCost + distanceCost + rentalCost;
+  allRoutes.push({
+    vehicleId: currentVehicle.id,
+    vehicleName: currentVehicle.name,
+    isRented: currentVehicle.isRented || false,
+    stations: route.stations,
+    totalDistance: route.totalDistance.toFixed(2),
+    totalWeight: parseInt(route.totalWeight),
+    capacity: route.capacity,
+    utilization: (parseInt(route.totalWeight) / route.capacity * 100).toFixed(1),
+    fuelCost: fuelCost.toFixed(2),
+    distanceCost: distanceCost.toFixed(2),
+    rentalCost: rentalCost,
+    totalCost: totalRouteCost.toFixed(2)
+  });
 
-      allRoutes.push({
-        vehicleId: currentVehicle.id,
-        vehicleName: currentVehicle.name,
-        isRented: currentVehicle.isRented || false,
-        stations: route.stations,
-        totalDistance: route.totalDistance.toFixed(2),
-        totalWeight: parseInt(route.totalWeight),
-        capacity: route.capacity,
-        utilization: (parseInt(route.totalWeight) / route.capacity * 100).toFixed(1),
-        fuelCost: fuelCost.toFixed(2),
-        distanceCost: distanceCost.toFixed(2),
-        rentalCost: rentalCost,
-        totalCost: totalRouteCost.toFixed(2)
-      });
-
-      totalCost += totalRouteCost;
-      vehiclesUsed.push(currentVehicle);
-      activeVehicleIdx++;
-    }
+  totalCost += totalRouteCost;
+  activeVehicleIdx++;
+  console.log(`[SOLVE] activeVehicleIdx incremented to: ${activeVehicleIdx}`);
+}
 
     console.log(`[SOLVE] Completed! Total routes: ${allRoutes.length}, Total cost: ${totalCost}`);
 

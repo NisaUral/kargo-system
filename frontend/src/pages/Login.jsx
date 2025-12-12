@@ -1,106 +1,271 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import '../styles/Login.css';
 
 const API_URL = 'http://localhost:5000/api';
 
 function Login() {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [userType, setUserType] = useState('user'); // 'user' veya 'admin'
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('login');
+  const [loginData, setLoginData] = useState({
+    email: '',
+    password: '',
+    userType: 'user'
+  });
+  const [registerData, setRegisterData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    userType: 'user'
+  });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    setLoading(true);
 
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
-        email,
-        password
+        email: loginData.email,
+        password: loginData.password
       });
 
-      const { token, user } = response.data;
-
-      // Token'ı localStorage'a kaydet
-      // Token'ı localStorage'a kaydet
-localStorage.setItem('userToken', token);
-localStorage.setItem('user', JSON.stringify(user));
-
-// User rolü kontrol et
-if (user.role === 'admin') {
-  localStorage.setItem('adminToken', token);
-  localStorage.setItem('adminUser', JSON.stringify(user));
-  navigate('/admin');
-} else {
-  navigate('/user');
-}
-
-    } catch (error) {
-      setError('Giriş başarısız: ' + (error.response?.data?.error || error.message));
+      if (response.data.token) {
+        const tokenKey = loginData.userType === 'admin' ? 'adminToken' : 'userToken';
+        localStorage.setItem(tokenKey, response.data.token);
+        localStorage.setItem('userRole', response.data.user.role);
+        
+        if (response.data.user.role === 'admin') {
+          window.location.href = '/admin';
+        } else {
+          window.location.href = '/user';
+        }
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Giriş başarısız!');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!registerData.name || !registerData.email || !registerData.password) {
+      setError('Tüm alanları doldurunuz!');
+      return;
+    }
+
+    if (registerData.password !== registerData.confirmPassword) {
+      setError('Şifreler eşleşmiyor!');
+      return;
+    }
+
+    if (registerData.password.length < 6) {
+      setError('Şifre en az 6 karakter olmalı!');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await axios.post(`${API_URL}/auth/register`, {
+        name: registerData.name,
+        email: registerData.email,
+        password: registerData.password,
+        role: registerData.userType
+      });
+
+      if (response.data.token) {
+        const tokenKey = registerData.userType === 'admin' ? 'adminToken' : 'userToken';
+        localStorage.setItem(tokenKey, response.data.token);
+        localStorage.setItem('userRole', response.data.user.role);
+        
+        if (response.data.user.role === 'admin') {
+          window.location.href = '/admin';
+        } else {
+          window.location.href = '/user';
+        }
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Kayıt başarısız!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoginChange = (e) => {
+    const { name, value } = e.target;
+    setLoginData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleRegisterChange = (e) => {
+    const { name, value } = e.target;
+    setRegisterData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   return (
     <div className="login-container">
       <div className="login-card">
-        <h1>🚚 Kargo Sistemi</h1>
-        <h2>Giriş Yap</h2>
+        <h1>🚚 Kargo İşletme Sistemi</h1>
+
+        <div className="tabs">
+          <button
+            className={`tab ${activeTab === 'login' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('login');
+              setError('');
+            }}
+          >
+            Giriş Yap
+          </button>
+          <button
+            className={`tab ${activeTab === 'register' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('register');
+              setError('');
+            }}
+          >
+            Kayıt Ol
+          </button>
+        </div>
 
         {error && <div className="error-message">{error}</div>}
 
-        <form onSubmit={handleLogin}>
-          <div className="form-group">
-            <label>Giriş Türü:</label>
-            <select 
-              value={userType} 
-              onChange={(e) => setUserType(e.target.value)}
-            >
-              <option value="user">Kullanıcı</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
+        {activeTab === 'login' && (
+          <form onSubmit={handleLogin}>
+            <div className="form-group">
+              <label>Email:</label>
+              <input
+                type="email"
+                name="email"
+                value={loginData.email}
+                onChange={handleLoginChange}
+                placeholder="example@mail.com"
+                required
+              />
+            </div>
 
-          <div className="form-group">
-            <label>Email:</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
-              required
-            />
-          </div>
+            <div className="form-group">
+              <label>Şifre:</label>
+              <input
+                type="password"
+                name="password"
+                value={loginData.password}
+                onChange={handleLoginChange}
+                placeholder="••••••"
+                required
+              />
+            </div>
 
-          <div className="form-group">
-            <label>Şifre:</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </div>
+            <div className="form-group">
+              <label>Giriş Türü:</label>
+              <select
+                name="userType"
+                value={loginData.userType}
+                onChange={handleLoginChange}
+              >
+                <option value="user">Kullanıcı</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
 
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? '⏳ Girişe çalışılıyor...' : 'Giriş Yap'}
-          </button>
-        </form>
+            <button type="submit" className="btn-login" disabled={loading}>
+              {loading ? '⏳ Giriş Yapılıyor...' : '🔓 Giriş Yap'}
+            </button>
 
-        <div className="demo-users">
-          <h3>Demo Hesapları:</h3>
-          <p><strong>Admin:</strong> admin@example.com / admin123</p>
-          <p><strong>User:</strong> nisa@example.com / 123456</p>
-        </div>
+            <div className="demo-credentials">
+              <p><strong>Demo Kimlik Bilgileri:</strong></p>
+              <p>👤 User: user@example.com / user123</p>
+              <p>👨‍💼 Admin: admin@example.com / admin123</p>
+            </div>
+          </form>
+        )}
 
-        <a href="/" className="back-link">← Ana Sayfa</a>
+        {activeTab === 'register' && (
+          <form onSubmit={handleRegister}>
+            <div className="form-group">
+              <label>Ad Soyad:</label>
+              <input
+                type="text"
+                name="name"
+                value={registerData.name}
+                onChange={handleRegisterChange}
+                placeholder="Adınız Soyadınız"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Email:</label>
+              <input
+                type="email"
+                name="email"
+                value={registerData.email}
+                onChange={handleRegisterChange}
+                placeholder="example@mail.com"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Şifre:</label>
+              <input
+                type="password"
+                name="password"
+                value={registerData.password}
+                onChange={handleRegisterChange}
+                placeholder="••••••"
+                minLength="6"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Şifre Tekrar:</label>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={registerData.confirmPassword}
+                onChange={handleRegisterChange}
+                placeholder="••••••"
+                minLength="6"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Hesap Türü:</label>
+              <select
+                name="userType"
+                value={registerData.userType}
+                onChange={handleRegisterChange}
+              >
+                <option value="user">Kullanıcı</option>
+              </select>
+              <small style={{ color: '#666', marginTop: '5px', display: 'block' }}>
+                Admin hesabı için sistem yöneticisine başvurunuz
+              </small>
+            </div>
+
+            <button type="submit" className="btn-login" disabled={loading}>
+              {loading ? '⏳ Kayıt Yapılıyor...' : '📝 Kayıt Ol'}
+            </button>
+
+            <p style={{ textAlign: 'center', marginTop: '15px', color: '#666', fontSize: '13px' }}>
+              Zaten bir hesabınız var mı? <a href="#" onClick={() => setActiveTab('login')} style={{ color: '#3498db', textDecoration: 'none' }}>Giriş yapın</a>
+            </p>
+          </form>
+        )}
       </div>
     </div>
   );

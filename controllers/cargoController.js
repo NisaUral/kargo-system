@@ -26,7 +26,7 @@ const sendCargo = async (req, res) => {
       `INSERT INTO cargo_requests 
        (user_id, station_id, cargo_count, cargo_weight_kg, status) 
        VALUES (?, ?, ?, ?, 'pending')`,
-      [user_id, station_id, parseInt(cargo_count), parseInt(cargo_weight_kg)]
+      [user_id, station_id, parseInt(cargo_count), parseInt(cargo_weight_kg),'pending']
     );
 
     res.status(201).json({

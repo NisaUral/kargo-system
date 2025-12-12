@@ -14,9 +14,7 @@ function FitBoundsComponent({ stations, routePolylines }) {
   
   useEffect(() => {
     if (map) {
-      // Eğer rotalar varsa onları göster
       if (routePolylines && routePolylines.length > 0) {
-        // Tüm polyline'ların boundları hesapla
         let bounds = null;
         routePolylines.forEach(poly => {
           if (poly.positions && poly.positions.length > 0) {
@@ -31,16 +29,13 @@ function FitBoundsComponent({ stations, routePolylines }) {
         });
         if (bounds) {
           map.fitBounds(bounds, { padding: [50, 50] });
-          console.log('Fitted to routes');
         }
       } 
-      // Yoksa istasyonları göster
       else if (stations && stations.length > 0) {
         const bounds = stations.map(s => 
           [parseFloat(s.latitude), parseFloat(s.longitude)]
         );
         map.fitBounds(bounds, { padding: [50, 50] });
-        console.log('Fitted to stations');
       }
     }
   }, [stations, routePolylines, map]);
@@ -54,31 +49,23 @@ function RouteLines({ routePolylines }) {
   
   useEffect(() => {
     if (routePolylines && routePolylines.length > 0 && map) {
-      console.log('Adding polylines to map:', routePolylines);
-      
-      // Önceki polyline'ları temizle
       map.eachLayer(layer => {
         if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
           map.removeLayer(layer);
         }
       });
       
-      // Yeni polyline'ları ekle
       routePolylines.forEach((poly, idx) => {
-        console.log(`Polyline ${idx}:`, poly);
-        console.log(`Positions:`, JSON.stringify(poly.positions));
-        
         if (poly.positions && poly.positions.length > 0) {
           try {
-            const line = L.polyline(poly.positions, {
+            L.polyline(poly.positions, {
               color: poly.color,
               weight: poly.weight,
               opacity: poly.opacity,
               dashArray: poly.dashArray
             }).addTo(map);
-            console.log(`✅ Polyline ${idx} added`);
           } catch (e) {
-            console.error(`❌ Error adding polyline ${idx}:`, e);
+            console.error(`Error adding polyline ${idx}:`, e);
           }
         }
       });
@@ -94,6 +81,8 @@ function Admin() {
   const [vehicles, setVehicles] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [routePolylines, setRoutePolylines] = useState([]);
+  const [allRoutes, setAllRoutes] = useState([]);
+  const [allRoutePolylines, setAllRoutePolylines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
     totalCost: 0,
@@ -106,6 +95,31 @@ function Admin() {
     loadStations();
     loadVehicles();
   }, []);
+
+  useEffect(() => {
+  if (activeTab === 'dashboard') {
+    console.log('📍 Dashboard açıldı');
+    setAllRoutePolylines([]); 
+    setRoutePolylines([]);
+    
+    if (stations.length > 0) {
+      console.log('📍 loadAllRoutes çağrılıyor');
+      loadAllRoutes();
+    } else {
+      console.log('⚠️ Stations yüklenmedi!');
+    }
+  }
+}, [activeTab, stations]);
+
+  // Dashboard açılırken haritayı sıfırla
+useEffect(() => {
+  if (activeTab === 'dashboard') {
+    setAllRoutePolylines([]); // Harita temizle
+    if (stations.length > 0) {
+      loadAllRoutes();
+    }
+  }
+}, [activeTab]);
 
   const loadStations = async () => {
     try {
@@ -125,30 +139,23 @@ function Admin() {
     }
   };
 
- const drawRoutesOnMap = (routesList) => {
+  const drawRoutesOnMap = (routesList) => {
   const colors = ['#27ae60', '#e74c3c', '#f39c12', '#3498db', '#9b59b6'];
   
   const routeLines = routesList.map((route, idx) => {
     const coordinates = route.stations
       .map(stationId => {
-        // University (ID 0) için özel koordinat
-        if (stationId === 0) {
-          return [40.8667, 29.85]; // Üniversite koordinatları
+        if (stationId === 13) {
+          return [40.8667, 29.85];
         }
         
         const station = stations.find(s => s.id === stationId);
-        if (!station) {
-          console.warn(`Station ${stationId} bulunamadı`);
-          return null;
-        }
+        if (!station) return null;
         return [parseFloat(station.latitude), parseFloat(station.longitude)];
       })
       .filter(c => c !== null);
     
-    if (coordinates.length === 0) {
-      console.warn(`Route ${idx} boş koordinat`);
-      return null;
-    }
+    if (coordinates.length === 0) return null;
     
     return {
       positions: coordinates,
@@ -163,54 +170,109 @@ function Admin() {
   setRoutePolylines(routeLines);
 };
 
-  const calculateRoutes = async () => {
-    setLoading(true);
+  // Tüm rotaları yükle
+  const loadAllRoutes = async () => {
     try {
-      const response = await axios.post(
-        `${API_URL}/routes/calculate`,
-        { problem_type: 'unlimited' },
-        {
-          headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`
-          }
+      const response = await axios.get(`${API_URL}/routes/all`, {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
         }
-      );
-
-      console.log('Routes response:', response.data);
-      setRoutes(response.data.routes);
-      setStats({
-        totalCost: parseFloat(response.data.totalCost),
-        vehiclesUsed: response.data.vehiclesUsed,
-        totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
-        totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
       });
-
+      
+      setAllRoutes(response.data.routes);
+      drawAllRoutes(response.data.routes);
     } catch (error) {
-      console.error('Error calculating routes:', error);
-      alert('Rota hesaplanırken hata oluştu: ' + error.message);
-    } finally {
-      setLoading(false);
+      console.error('Error loading all routes:', error);
     }
   };
 
-  // Routes güncellenince rotaları çiz
- // Routes güncellenince rotaları çiz
-useEffect(() => {
-  if (routes.length > 0 && stations.length > 0) {
-    console.log('Routes updated, drawing...', routes);
+  // Tüm rotaları harita'ya çiz
+  const drawAllRoutes = (routesList) => {
+  const colors = ['#27ae60', '#e74c3c', '#f39c12', '#3498db', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
+  
+  console.log('drawAllRoutes called with:', routesList); // DEBUG
+  
+  const routeLines = routesList.map((route, idx) => {
+    console.log(`Route ${idx}:`, route); // DEBUG
     
-    // Timeout ekle (re-render olması için)
-    const timer = setTimeout(() => {
-      drawRoutesOnMap(routes);
-    }, 100);
+    const coordinates = route.stations
+      .map(stationId => {
+        if (stationId === 13) {
+          return [40.8667, 29.85];
+        }
+        const station = stations.find(s => s.id === stationId);
+        if (!station) {
+          console.warn(`Station ${stationId} bulunamadı`);
+          return null;
+        }
+        return [parseFloat(station.latitude), parseFloat(station.longitude)];
+      })
+      .filter(c => c !== null);
+
+    console.log(`Route ${idx} coordinates:`, coordinates); // DEBUG
+
+    if (coordinates.length === 0) return null;
+
+    return {
+      positions: coordinates,
+      color: colors[idx % colors.length],
+      weight: 3,
+      opacity: 0.7,
+      dashArray: '5, 5'
+    };
+  })
+  .filter(line => line !== null);
+
+  console.log('Route lines:', routeLines); // DEBUG
+  setAllRoutePolylines(routeLines);
+};
+
+  const calculateRoutes = async () => {
+  setLoading(true);
+  try {
+    console.log('🚀 Calculating routes...');
     
-    return () => clearTimeout(timer);
+    const response = await axios.post(
+      `${API_URL}/routes/calculate`,
+      { problem_type: 'unlimited' },
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
+        }
+      }
+    );
+
+    console.log('✅ Routes calculated:', response.data);
+    setRoutes(response.data.routes);
+    setStats({
+      totalCost: parseFloat(response.data.totalCost),
+      vehiclesUsed: response.data.vehiclesUsed,
+      totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
+      totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
+    });
+
+    // BURAYI EKLE:
+    loadAllRoutes(); // Yeni rotaları yükle
+
+  } catch (error) {
+    console.error('Error calculating routes:', error);
+    alert('Rota hesaplanırken hata oluştu: ' + error.message);
+  } finally {
+    setLoading(false);
   }
-}, [routes, stations]);
+};
+  useEffect(() => {
+    if (routes.length > 0 && stations.length > 0) {
+      const timer = setTimeout(() => {
+        drawRoutesOnMap(routes);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [routes, stations]);
 
   return (
     <div className="admin-container">
-      {/* Sidebar */}
       <div className="sidebar">
         <h2>📊 Admin</h2>
         <nav>
@@ -242,7 +304,6 @@ useEffect(() => {
         </nav>
       </div>
 
-      {/* Main Content */}
       <div className="main-content">
         <div className="header">
           <h1>Kargo İşletme Sistemi - Admin Paneli</h1>
@@ -255,35 +316,32 @@ useEffect(() => {
           </button>
         </div>
 
-        {/* Dashboard Section */}
         {activeTab === 'dashboard' && (
           <section className="section">
-            <h2>📍 Harita Görünümü</h2>
+            <h2>📍 Harita Görünümü - Tüm Rotalar</h2>
             
             {stations.length > 0 && (
-  <div style={{ 
-    width: '100%',
-    height: '500px', 
-    marginBottom: '30px', 
-    borderRadius: '8px',
-    overflow: 'hidden',
-    position: 'relative',
-    border: '1px solid #ddd'
-  }}>
-    <MapContainer
-  key={`map-${routes.length}`}
-  style={{ width: '100%', height: '100%' }}
-  className="leaflet-map"
->
-  <TileLayer
-    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-    attribution='© OpenStreetMap contributors'
-  />
-  <FitBoundsComponent stations={stations} routePolylines={routePolylines} />
-  <RouteLines routePolylines={routePolylines} />
-  
-  {/* Marker'lar */}
-  {stations.map(station => (
+              <div style={{ 
+                width: '100%',
+                height: '500px', 
+                marginBottom: '30px', 
+                borderRadius: '8px',
+                overflow: 'hidden',
+                position: 'relative',
+                border: '1px solid #ddd'
+              }}>
+                <MapContainer
+                  style={{ width: '100%', height: '100%' }}
+                  className="leaflet-map"
+                >
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='© OpenStreetMap contributors'
+                  />
+                  <FitBoundsComponent stations={stations} routePolylines={allRoutePolylines} />
+                  <RouteLines routePolylines={allRoutePolylines} />
+                  
+                  {stations.map(station => (
                     <Marker
                       key={station.id}
                       position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
@@ -309,97 +367,31 @@ useEffect(() => {
               </div>
             )}
 
-            <div className="stats-grid">
-              <div className="stat-card">
-                <h3>Toplam Maliyet</h3>
-                <div className="stat-value">₺ {stats.totalCost.toFixed(2)}</div>
-                <div className="stat-sub">Kullanılan Araçlar: {stats.vehiclesUsed}</div>
-              </div>
-
-              <div className="stat-card">
-                <h3>Taşınan Kargo</h3>
-                <div className="stat-value">{stats.totalWeight} kg</div>
-                <div className="stat-sub">Mesafe: {stats.totalDistance.toFixed(2)} km</div>
-              </div>
-
-              <div className="stat-card">
-                <h3>🚚 Araç Kiralama</h3>
-                <p style={{ marginBottom: '15px', color: '#666', fontSize: '14px' }}>
-                  Gerekirse ek araç kiralayabilirsiniz
-                </p>
-                <button 
-                  className="rental-btn"
-                  onClick={() => alert('500 kg kapasiteli araç: 200 TL/gün')}
-                >
-                  + Araç Kirala
-                </button>
-                <div style={{ marginTop: '15px', fontSize: '13px', color: '#666' }}>
-                  Kiralanan: {Math.max(0, stats.vehiclesUsed - 3)}<br />
-                  Maliyet: ₺ {Math.max(0, stats.vehiclesUsed - 3) * 200}
-                </div>
-              </div>
-            </div>
-
-            <h3 style={{ marginTop: '30px' }}>Rota Özeti</h3>
+            <h3>Tüm Rotalar</h3>
             <table className="table">
               <thead>
                 <tr>
                   <th>Araç</th>
+                  <th>Kullanıcı</th>
                   <th>İstasyonlar</th>
-                  <th>Ağırlık (kg)</th>
                   <th>Mesafe (km)</th>
-                  <th>Maliyet (₺)</th>
-                  <th>Kapasite</th>
-                </tr>
-              </thead>
-              <tbody>
-                {routes.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" style={{ textAlign: 'center' }}>Rota hesaplanmadı</td>
-                  </tr>
-                ) : (
-                  routes.map((route, idx) => (
-                    <tr key={idx}>
-                      <td>{route.vehicleName}</td>
-                      <td>{route.stations.length}</td>
-                      <td>{route.totalWeight}</td>
-                      <td>{route.totalDistance}</td>
-                      <td>₺ {route.totalCost}</td>
-                      <td>{route.utilization}%</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </section>
-        )}
-
-        {/* Rotalar Section */}
-        {activeTab === 'rotalar' && (
-          <section className="section">
-            <h2>🛣️ Detaylı Rota Bilgileri</h2>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Araç</th>
-                  <th>İstasyon Sayısı</th>
                   <th>Ağırlık (kg)</th>
-                  <th>Kapasite Kullanımı</th>
                   <th>Maliyet (₺)</th>
                 </tr>
               </thead>
               <tbody>
-                {routes.length === 0 ? (
+                {allRoutes.length === 0 ? (
                   <tr>
-                    <td colSpan="5" style={{ textAlign: 'center' }}>Rota yok</td>
+                    <td colSpan="6" style={{ textAlign: 'center' }}>Rota yok</td>
                   </tr>
                 ) : (
-                  routes.map((route, idx) => (
+                  allRoutes.map((route, idx) => (
                     <tr key={idx}>
-                      <td>{route.vehicleName}</td>
+                      <td>{route.vehicleId}</td>
+                      <td>{route.users.join(', ')}</td>
                       <td>{route.stations.length}</td>
+                      <td>{route.totalDistance}</td>
                       <td>{route.totalWeight}</td>
-                      <td>{route.utilization}%</td>
                       <td>₺ {route.totalCost}</td>
                     </tr>
                   ))
@@ -409,7 +401,47 @@ useEffect(() => {
           </section>
         )}
 
-        {/* İstasyonlar Section */}
+        {activeTab === 'rotalar' && (
+  <section className="section">
+    <h2>🛣️ Detaylı Rota Bilgileri</h2>
+    <table className="table">
+      <thead>
+        <tr>
+          <th>Araç ID</th>
+          <th>Rota (İstasyonlar)</th>
+          <th>Kargo Sayısı</th>
+          <th>Ağırlık (kg)</th>
+          <th>Maliyet (₺)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {allRoutes.length === 0 ? (
+          <tr>
+            <td colSpan="5" style={{ textAlign: 'center' }}>Rota yok</td>
+          </tr>
+        ) : (
+          allRoutes.map((route, idx) => (
+            <tr key={idx}>
+              <td>Araç {route.vehicleId}</td>
+              <td>
+                {route.stations
+                  .map(stationId => {
+                    if (stationId === 13) return 'UNI';
+                    const station = stations.find(s => s.id === stationId);
+                    return station ? station.name.substring(0, 3) : `S${stationId}`;
+                  })
+                  .join(' → ')}
+              </td>
+              <td>{route.stations.filter(s => s !== 13).length}</td>
+              <td>{route.totalWeight} kg</td>
+              <td>₺ {route.totalCost}</td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </section>
+)}
         {activeTab === 'istasyonlar' && (
           <section className="section">
             <h2>🏢 İstasyonlar</h2>
@@ -436,7 +468,6 @@ useEffect(() => {
           </section>
         )}
 
-        {/* Araçlar Section */}
         {activeTab === 'araclar' && (
           <section className="section">
             <h2>🚗 Araçlar</h2>
