@@ -8,6 +8,7 @@ import L from 'leaflet';
 const API_URL = 'http://localhost:5000/api';
 const ADMIN_TOKEN = localStorage.getItem('adminToken');
 
+
 // FitBounds Component
 function FitBoundsComponent({ stations, routePolylines }) {
   const map = useMap();
@@ -84,6 +85,7 @@ function Admin() {
   const [allRoutes, setAllRoutes] = useState([]);
   const [allRoutePolylines, setAllRoutePolylines] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [map, setMap] = useState(null);
   const [stats, setStats] = useState({
     totalCost: 0,
     vehiclesUsed: 0,
@@ -171,60 +173,68 @@ useEffect(() => {
 };
 
   // Tüm rotaları yükle
-  const loadAllRoutes = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/routes/all`, {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
-        }
-      });
-      
-      setAllRoutes(response.data.routes);
-      drawAllRoutes(response.data.routes);
-    } catch (error) {
-      console.error('Error loading all routes:', error);
-    }
-  };
-
-  // Tüm rotaları harita'ya çiz
-  const drawAllRoutes = (routesList) => {
-  const colors = ['#27ae60', '#e74c3c', '#f39c12', '#3498db', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
-  
-  console.log('drawAllRoutes called with:', routesList); // DEBUG
-  
-  const routeLines = routesList.map((route, idx) => {
-    console.log(`Route ${idx}:`, route); // DEBUG
+const loadAllRoutes = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/routes/all`, {
+      headers: {
+        'Authorization': `Bearer ${ADMIN_TOKEN}`
+      }
+    });
     
+    setAllRoutes(response.data.routes);
+    drawAllRoutes(response.data.routes); // 👈 Parametre geç
+  } catch (error) {
+    console.error('Error loading all routes:', error);
+  }
+};
+const colors = ['red', 'blue', 'green', 'orange', 'purple', 'yellow', 'pink', 'cyan'];
+
+// YENİ KOD (sınırsız renk)
+const generateColor = (index) => {
+  const hue = (index * 60) % 360; // Her araç için farklı hue
+  return `hsl(${hue}, 70%, 50%)`;
+};
+  // Tüm rotaları harita'ya çiz
+  const drawAllRoutes = () => {
+  if (!map || !allRoutes || allRoutes.length === 0) return;
+
+  // Eski polylines'ı kaldır
+  allRoutePolylines.forEach(line => map.removeLayer(line));
+  setAllRoutePolylines([]);
+
+  const newPolylines = [];
+
+  allRoutes.forEach((route, routeIndex) => {
     const coordinates = route.stations
       .map(stationId => {
-        if (stationId === 13) {
-          return [40.8667, 29.85];
+        if (stationId === 0 || stationId === 13) {
+          return [40.8667, 29.85]; // University
         }
         const station = stations.find(s => s.id === stationId);
-        if (!station) {
-          console.warn(`Station ${stationId} bulunamadı`);
-          return null;
-        }
-        return [parseFloat(station.latitude), parseFloat(station.longitude)];
+        return station ? [station.latitude, station.longitude] : null;
       })
-      .filter(c => c !== null);
+      .filter(coord => coord !== null);
 
-    console.log(`Route ${idx} coordinates:`, coordinates); // DEBUG
+    if (coordinates.length > 0) {
+      // Her araç için farklı renk
+      const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
+      const color = colors[routeIndex % colors.length];
 
-    if (coordinates.length === 0) return null;
+      const polyline = L.polyline(coordinates, {
+        color: color,
+        weight: 4,
+        opacity: 0.8,
+        dashArray: '5, 5'
+      }).addTo(map);
 
-    return {
-      positions: coordinates,
-      color: colors[idx % colors.length],
-      weight: 3,
-      opacity: 0.7,
-      dashArray: '5, 5'
-    };
-  })
-  .filter(line => line !== null);
+      // Popup ekle (araç bilgisi göster)
+      polyline.bindPopup(`<b>Araç ${routeIndex + 1}</b><br/>Mesafe: ${route.totalDistance}km<br/>Ağırlık: ${route.totalWeight}kg`);
 
-  console.log('Route lines:', routeLines); // DEBUG
-  setAllRoutePolylines(routeLines);
+      newPolylines.push(polyline);
+    }
+  });
+
+  setAllRoutePolylines(newPolylines);
 };
 
   const calculateRoutes = async () => {

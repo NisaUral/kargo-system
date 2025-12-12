@@ -34,9 +34,7 @@ const calculateRoutes = async (req, res) => {
         station: stations.find(s => s.id === cargo.station_id)
       };
     });
-   const [pendingCargos] = await db.query(
-  `SELECT id FROM cargo_requests WHERE status = 'pending'`
-);
+   
     // Eğer kargo yoksa
     if (Object.keys(cargoByStation).length === 0) {
       return res.json({
