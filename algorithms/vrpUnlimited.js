@@ -20,97 +20,107 @@ class UnlimitedVehicleVRP {
   }
 
   // Nearest Neighbor - En yakın şehri seç
- nearestNeighborRoute(startStationId, availableStations, vehicle) {
-  
-  const route = [startStationId];
-  let totalDistance = 0;
-  let totalWeight = parseInt(this.cargoByStation[startStationId]?.totalWeight) || 0; // ← parseInt EKLE
+  nearestNeighborRoute(startStationId, availableStations, vehicle) {
+    const route = [startStationId];
+    const visited = new Set([startStationId]);
+    let totalDistance = 0;
+    let totalWeight = parseInt(this.cargoByStation[startStationId]?.totalWeight) || 0;
 
-  console.log(`[NN] Starting with station ${startStationId}, available: ${availableStations.length}, weight: ${totalWeight}`);
+    console.log(`[NN] Starting with station ${startStationId}, available: ${availableStations.length}, weight: ${totalWeight}`);
 
-  while (availableStations.length > 0) {
-    let nearestStation = null;
-    let nearestDistance = Infinity;
-    let nearestIdx = -1;
-    const currentStationId = route[route.length - 1];
+    while (availableStations.length > 0) {
+      let nearestStation = null;
+      let nearestDistance = Infinity;
+      let nearestIdx = -1;
+      const currentStationId = route[route.length - 1];
 
-    // Ziyaret edilmemiş en yakın istasyonu bul
-    for (let i = 0; i < availableStations.length; i++) {
+      // Ziyaret edilmemiş en yakın istasyonu bul
+     for (let i = 0; i < availableStations.length; i++) {
   const stationId = availableStations[i];
+  
+  // Zaten visited'te varsa atla
+  if (visited.has(stationId)) {
+    continue;
+  }
   
   // currentStationId ile aynı değilse kontrol et
   if (stationId === currentStationId) {
     console.log(`[NN] Skipping current station ${stationId}`);
     continue;
   }
-  
-  const currentStationIdx = this.stations.findIndex(s => s.id === currentStationId);
-  const nextStationIdx = this.stations.findIndex(s => s.id === stationId);
-  
-  if (currentStationIdx === -1 || nextStationIdx === -1) {
-    console.log(`[NN] Station not found in distance matrix`);
-    continue;
-  }
-  
-  const distance = this.distanceMatrix[currentStationIdx][nextStationIdx];
-  const cargoWeight = parseInt(this.cargoByStation[stationId]?.totalWeight) || 0;
-  const potentialWeight = totalWeight + cargoWeight;
+        
+        const currentStationIdx = this.stations.findIndex(s => s.id === currentStationId);
+        const nextStationIdx = this.stations.findIndex(s => s.id === stationId);
+        
+        if (currentStationIdx === -1 || nextStationIdx === -1) {
+          console.log(`[NN] Station not found in distance matrix`);
+          continue;
+        }
+        
+        const distance = this.distanceMatrix[currentStationIdx][nextStationIdx];
+        const cargoWeight = parseInt(this.cargoByStation[stationId]?.totalWeight) || 0;
+        const potentialWeight = totalWeight + cargoWeight;
 
-  console.log(`[NN] Checking station ${stationId}: distance=${distance}, weight=${cargoWeight}, potential=${potentialWeight}, capacity=${vehicle.capacity_kg}`);
+        console.log(`[NN] Checking station ${stationId}: distance=${distance}, weight=${cargoWeight}, potential=${potentialWeight}, capacity=${vehicle.capacity_kg}`);
 
-  // Kapasite kontrol + mesafe karşılaştırması
-  if (potentialWeight <= vehicle.capacity_kg && distance < nearestDistance) {
-    nearestDistance = distance;
-    nearestStation = stationId;
-    nearestIdx = i;
-    console.log(`[NN] New best: station ${stationId}, distance ${distance}`);
-  }
-}
-
-    // Uygun istasyon bulunamadı
-    if (nearestStation === null) {
-      console.log(`[NN] No more stations can be added. Current route: ${route.length} stations, weight: ${totalWeight}`);
-      
-      // Tüm rotada olan istasyonları availableStations'tan kaldır
-      for (let i = availableStations.length - 1; i >= 0; i--) {
-        if (route.includes(availableStations[i])) {
-          availableStations.splice(i, 1);
+        // Kapasite kontrol + mesafe karşılaştırması
+        if (potentialWeight <= vehicle.capacity_kg && distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestStation = stationId;
+          nearestIdx = i;
+          console.log(`[NN] New best: station ${stationId}, distance ${distance}`);
         }
       }
-      break;
+
+      // Uygun istasyon bulunamadı
+      // Uygun istasyon bulunamadı
+if (nearestStation === null) {
+  console.log(`[NN] No more stations can be added. Current route: ${route.length} stations, weight: ${totalWeight}`);
+  
+  // Tüm rotada olan istasyonları availableStations'tan kaldır
+  for (let i = availableStations.length - 1; i >= 0; i--) {
+    if (visited.has(availableStations[i])) {
+      availableStations.splice(i, 1);
+    }
+  }
+  break;
+}
+
+// Yeni istasyonu rotaya ekle
+visited.add(nearestStation);
+route.push(nearestStation);
+      totalDistance += nearestDistance;
+      totalWeight += parseInt(this.cargoByStation[nearestStation].totalWeight) || 0;
+
+      console.log(`[NN] Added station ${nearestStation}, route now: ${route.length} stations, total weight: ${totalWeight}`);
+
+      // availableStations'tan sil
+      availableStations.splice(nearestIdx, 1);
     }
 
-    // Yeni istasyonu rotaya ekle
-    route.push(nearestStation);
-    totalDistance += nearestDistance;
-    totalWeight += this.cargoByStation[nearestStation].totalWeight;
+    // Üniversiteye dönüş
+    const lastStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
+    const returnDistance = haversineDistance(
+      this.stations[lastStationIdx].latitude,
+      this.stations[lastStationIdx].longitude,
+      this.university.latitude,
+      this.university.longitude
+    );
+    totalDistance += returnDistance;
 
-    console.log(`[NN] Added station ${nearestStation}, route now: ${route.length} stations, total weight: ${totalWeight}`);
+    // ÖNEMLİ: Üniversiteyi rotaya ekle!
+    route.push(0); // 0 = University (university için özel ID)
 
-    // availableStations'tan sil
-    availableStations.splice(nearestIdx, 1);
+    console.log(`[NN] Final route: ${route.join('->')} (${route.length} stations)`);
+
+    return {
+      stations: route,
+      totalDistance,
+      totalWeight: parseInt(totalWeight),
+      capacity: vehicle.capacity_kg,
+      utilization: (parseInt(totalWeight) / vehicle.capacity_kg * 100).toFixed(1)
+    };
   }
-
-  // Üniversiteye dönüş
-  const lastStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
-  const returnDistance = haversineDistance(
-    this.stations[lastStationIdx].latitude,
-    this.stations[lastStationIdx].longitude,
-    this.university.latitude,
-    this.university.longitude
-  );
-  totalDistance += returnDistance;
-
-  console.log(`[NN] Final route: ${route.join('->')} (${route.length} stations)`);
-
-  return {
-    stations: route,
-    totalDistance,
-    totalWeight,
-    capacity: vehicle.capacity_kg,
-    utilization: (totalWeight / vehicle.capacity_kg * 100).toFixed(1)
-  };
-}
 
   // Ana algoritma
   solve() {
@@ -169,9 +179,9 @@ class UnlimitedVehicleVRP {
         isRented: currentVehicle.isRented || false,
         stations: route.stations,
         totalDistance: route.totalDistance.toFixed(2),
-        totalWeight: route.totalWeight,
+        totalWeight: parseInt(route.totalWeight),
         capacity: route.capacity,
-        utilization: route.utilization,
+        utilization: (parseInt(route.totalWeight) / route.capacity * 100).toFixed(1),
         fuelCost: fuelCost.toFixed(2),
         distanceCost: distanceCost.toFixed(2),
         rentalCost: rentalCost,

@@ -125,20 +125,30 @@ function Admin() {
     }
   };
 
-  const drawRoutesOnMap = (routesList) => {
-  console.log('Drawing routes with stations:', stations);
+ const drawRoutesOnMap = (routesList) => {
   const colors = ['#27ae60', '#e74c3c', '#f39c12', '#3498db', '#9b59b6'];
   
   const routeLines = routesList.map((route, idx) => {
     const coordinates = route.stations
       .map(stationId => {
+        // University (ID 0) için özel koordinat
+        if (stationId === 0) {
+          return [40.8667, 29.85]; // Üniversite koordinatları
+        }
+        
         const station = stations.find(s => s.id === stationId);
-        if (!station) return null;
+        if (!station) {
+          console.warn(`Station ${stationId} bulunamadı`);
+          return null;
+        }
         return [parseFloat(station.latitude), parseFloat(station.longitude)];
       })
       .filter(c => c !== null);
     
-    if (coordinates.length === 0) return null;
+    if (coordinates.length === 0) {
+      console.warn(`Route ${idx} boş koordinat`);
+      return null;
+    }
     
     return {
       positions: coordinates,
@@ -150,7 +160,6 @@ function Admin() {
   })
   .filter(line => line !== null);
   
-  console.log('Route lines created:', routeLines.length);
   setRoutePolylines(routeLines);
 };
 
