@@ -63,26 +63,32 @@ const calculateRoutes = async (req, res) => {
     }
 
     // Rotaları ve kargo atamalarını database'e kaydet
-    for (const route of result.routes) {
+   // Rotaları ve kargo atamalarını database'e kaydet
+for (const route of result.routes) {
   console.log(`📍 Inserting route - vehicleId: ${route.vehicleId}, stations: ${route.stations.join(',')}, weight: ${route.totalWeight}`);
   
-  // Rotayı database'e kaydet
+  // ÖNEMLİ: Üniversiteyi de ekle!
+  const stationsWithUniversity = route.stations.includes(0) 
+    ? route.stations 
+    : [...route.stations, 0]; // 0 = University
+  
   const [routeResult] = await db.query(
-    `INSERT INTO routes (vehicle_id, total_distance_km, total_weight_kg, fuel_cost, distance_cost, total_cost) 
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO routes (vehicle_id, total_distance_km, total_weight_kg, fuel_cost, distance_cost, total_cost, stations) 
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       route.vehicleId,
       parseFloat(route.totalDistance),
       route.totalWeight,
       parseFloat(route.fuelCost),
       parseFloat(route.distanceCost),
-      parseFloat(route.totalCost)
+      parseFloat(route.totalCost),
+      stationsWithUniversity.join(',')  
     ]
   );
 
   console.log(`✅ Route inserted with ID: ${routeResult.insertId}, vehicle_id: ${route.vehicleId}`);
-      const routeId = routeResult.insertId;
-
+  const routeId = routeResult.insertId;
+ 
       // Her istasyondaki kargo'ları shipments'e ekle
       for (const stationId of route.stations) {
         if (stationId === 13) continue; // Üniversite, atla
@@ -121,5 +127,6 @@ const calculateRoutes = async (req, res) => {
     res.status(500).json({ error: 'Rota hesaplanamadı!' });
   }
 };
+
 
 module.exports = { calculateRoutes };

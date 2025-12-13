@@ -50,6 +50,9 @@ function RouteLines({ routePolylines }) {
   
   useEffect(() => {
     if (routePolylines && routePolylines.length > 0 && map) {
+      console.log(`🎨 RouteLines: ${routePolylines.length} polyline eklenecek`);
+      
+      // Eski polylines'ı kaldır
       map.eachLayer(layer => {
         if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
           map.removeLayer(layer);
@@ -57,16 +60,18 @@ function RouteLines({ routePolylines }) {
       });
       
       routePolylines.forEach((poly, idx) => {
+        console.log(`📍 Polyline ${idx} ekleniyor:`, poly);
         if (poly.positions && poly.positions.length > 0) {
           try {
-            L.polyline(poly.positions, {
+            const line = L.polyline(poly.positions, {
               color: poly.color,
               weight: poly.weight,
               opacity: poly.opacity,
               dashArray: poly.dashArray
             }).addTo(map);
+            console.log(`✅ Polyline ${idx} eklendi`);
           } catch (e) {
-            console.error(`Error adding polyline ${idx}:`, e);
+            console.error(`❌ Error adding polyline ${idx}:`, e);
           }
         }
       });
@@ -175,17 +180,73 @@ useEffect(() => {
   // Tüm rotaları yükle
 const loadAllRoutes = async () => {
   try {
+    console.log('📍 loadAllRoutes başlıyor...');
     const response = await axios.get(`${API_URL}/routes/all`, {
       headers: {
         'Authorization': `Bearer ${ADMIN_TOKEN}`
       }
     });
     
-    setAllRoutes(response.data.routes);
-    drawAllRoutes(response.data.routes); // 👈 Parametre geç
+    console.log('✅ Routes geldi:', response.data.routes);
+    setAllRoutes(response.data.routes); // State update
+    
+    drawAllRoutesWithData(response.data.routes);
+    
   } catch (error) {
     console.error('Error loading all routes:', error);
   }
+};
+
+// Yeni fonksiyon
+const drawAllRoutesWithData = (routesToDraw) => {
+  console.log('🎨 drawAllRoutesWithData içinde, routes:', routesToDraw);
+  
+  if (!routesToDraw || routesToDraw.length === 0) {
+    console.log('⚠️ Routes boş!');
+    return;
+  }
+
+  const newPolylines = [];
+
+  routesToDraw.forEach((route, routeIndex) => {
+    console.log(`🎨 Route ${routeIndex}:`, route);
+    console.log(`🎨 Route ${routeIndex} stations:`, route.stations); // 👈 EKLE
+    console.log(`🎨 Route ${routeIndex} stations type:`, typeof route.stations); // 👈 EKLE
+
+     let stationsArray = route.stations;
+    if (typeof route.stations === 'string') {
+      stationsArray = route.stations.split(',').map(s => parseInt(s));
+      console.log(`🎨 Route ${routeIndex} parsed to array:`, stationsArray);
+    }
+    
+    const coordinates = route.stations
+      .map(stationId => {
+        console.log(`📍 Processing stationId ${stationId}`); // 👈 EKLE
+        if (stationId === 0 || stationId === 13) {
+          return [40.8667, 29.85];
+        }
+        const station = stations.find(s => s.id === stationId);
+        return station ? [parseFloat(station.latitude), parseFloat(station.longitude)] : null;
+      })
+      .filter(coord => coord !== null);
+
+    console.log(`📍 Final coordinates route ${routeIndex}:`, coordinates); // 👈 EKLE
+
+    if (coordinates.length > 0) {
+      const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
+      const color = colors[routeIndex % colors.length];
+
+      newPolylines.push({
+        positions: coordinates,
+        color: color,
+        weight: 4,
+        opacity: 0.8,
+        dashArray: '5, 5'
+      });
+    }
+  });
+
+  setAllRoutePolylines(newPolylines);
 };
 const colors = ['red', 'blue', 'green', 'orange', 'purple', 'yellow', 'pink', 'cyan'];
 
@@ -196,44 +257,47 @@ const generateColor = (index) => {
 };
   // Tüm rotaları harita'ya çiz
   const drawAllRoutes = () => {
-  if (!map || !allRoutes || allRoutes.length === 0) return;
-
-  // Eski polylines'ı kaldır
-  allRoutePolylines.forEach(line => map.removeLayer(line));
-  setAllRoutePolylines([]);
+  console.log('🎨 drawAllRoutes içinde, allRoutes:', allRoutes);
+  if (!allRoutes || allRoutes.length === 0) {
+    console.log('⚠️ allRoutes boş!');
+    return;
+  }
 
   const newPolylines = [];
 
   allRoutes.forEach((route, routeIndex) => {
+    console.log(`🎨 Route ${routeIndex}:`, route);
+    
     const coordinates = route.stations
       .map(stationId => {
         if (stationId === 0 || stationId === 13) {
           return [40.8667, 29.85]; // University
         }
         const station = stations.find(s => s.id === stationId);
-        return station ? [station.latitude, station.longitude] : null;
+        return station ? [parseFloat(station.latitude), parseFloat(station.longitude)] : null;
       })
       .filter(coord => coord !== null);
 
+    console.log(`📍 Coordinates için route ${routeIndex}:`, coordinates);
+
     if (coordinates.length > 0) {
-      // Her araç için farklı renk
       const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
       const color = colors[routeIndex % colors.length];
 
-      const polyline = L.polyline(coordinates, {
+      const polylineObj = {
+        positions: coordinates,
         color: color,
         weight: 4,
         opacity: 0.8,
         dashArray: '5, 5'
-      }).addTo(map);
+      };
 
-      // Popup ekle (araç bilgisi göster)
-      polyline.bindPopup(`<b>Araç ${routeIndex + 1}</b><br/>Mesafe: ${route.totalDistance}km<br/>Ağırlık: ${route.totalWeight}kg`);
-
-      newPolylines.push(polyline);
+      console.log(`✅ Polyline oluşturuldu route ${routeIndex}:`, polylineObj);
+      newPolylines.push(polylineObj);
     }
   });
 
+  console.log('📦 Toplam newPolylines:', newPolylines);
   setAllRoutePolylines(newPolylines);
 };
 

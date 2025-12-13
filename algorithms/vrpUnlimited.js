@@ -78,11 +78,7 @@ if (nearestStation === null) {
   console.log(`[NN] No more stations can be added. Current route: ${route.length} stations, weight: ${totalWeight}`);
   
   // Tüm rotada olan istasyonları availableStations'tan kaldır
-  for (let i = availableStations.length - 1; i >= 0; i--) {
-    if (visited.has(availableStations[i])) {
-      availableStations.splice(i, 1);
-    }
-  }
+ 
   break;
 }
 
