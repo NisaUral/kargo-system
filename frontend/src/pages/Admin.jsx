@@ -187,7 +187,7 @@ const loadAllRoutes = async () => {
       }
     });
     
-    console.log('✅ Routes geldi:', response.data.routes);
+    console.log(' Routes geldi:', response.data.routes);
     setAllRoutes(response.data.routes); // State update
     
     drawAllRoutesWithData(response.data.routes);
@@ -199,29 +199,29 @@ const loadAllRoutes = async () => {
 
 // Yeni fonksiyon
 const drawAllRoutesWithData = (routesToDraw) => {
-  console.log('🎨 drawAllRoutesWithData içinde, routes:', routesToDraw);
+  console.log(' drawAllRoutesWithData içinde, routes:', routesToDraw);
   
   if (!routesToDraw || routesToDraw.length === 0) {
-    console.log('⚠️ Routes boş!');
+    console.log(' Routes boş!');
     return;
   }
 
   const newPolylines = [];
 
   routesToDraw.forEach((route, routeIndex) => {
-    console.log(`🎨 Route ${routeIndex}:`, route);
-    console.log(`🎨 Route ${routeIndex} stations:`, route.stations); // 👈 EKLE
-    console.log(`🎨 Route ${routeIndex} stations type:`, typeof route.stations); // 👈 EKLE
+    console.log(` Route ${routeIndex}:`, route);
+    console.log(` Route ${routeIndex} stations:`, route.stations); // 👈 EKLE
+    console.log(` Route ${routeIndex} stations type:`, typeof route.stations); // 👈 EKLE
 
      let stationsArray = route.stations;
     if (typeof route.stations === 'string') {
       stationsArray = route.stations.split(',').map(s => parseInt(s));
-      console.log(`🎨 Route ${routeIndex} parsed to array:`, stationsArray);
+      console.log(` Route ${routeIndex} parsed to array:`, stationsArray);
     }
     
     const coordinates = route.stations
       .map(stationId => {
-        console.log(`📍 Processing stationId ${stationId}`); // 👈 EKLE
+        console.log(` Processing stationId ${stationId}`); // 👈 EKLE
         if (stationId === 0 || stationId === 13) {
           return [40.8667, 29.85];
         }
@@ -230,7 +230,7 @@ const drawAllRoutesWithData = (routesToDraw) => {
       })
       .filter(coord => coord !== null);
 
-    console.log(`📍 Final coordinates route ${routeIndex}:`, coordinates); // 👈 EKLE
+    console.log(` Final coordinates route ${routeIndex}:`, coordinates); // 👈 EKLE
 
     if (coordinates.length > 0) {
       const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
@@ -374,7 +374,7 @@ const generateColor = (index) => {
           >
             Araçlar
           </button>
-          <a href="/" className="nav-btn">Ana Sayfa</a>
+          <a href="/" className="nav-btn">Çıkış</a>
         </nav>
       </div>
 
@@ -386,13 +386,13 @@ const generateColor = (index) => {
             onClick={calculateRoutes}
             disabled={loading}
           >
-            {loading ? '⏳ Hesaplanıyor...' : '🚀 Rota Planla'}
+            {loading ? ' Hesaplanıyor...' : ' Rota Planla'}
           </button>
         </div>
 
         {activeTab === 'dashboard' && (
           <section className="section">
-            <h2>📍 Harita Görünümü - Tüm Rotalar</h2>
+            <h2> Harita Görünümü - Tüm Rotalar</h2>
             
             {stations.length > 0 && (
               <div style={{ 
@@ -477,7 +477,7 @@ const generateColor = (index) => {
 
         {activeTab === 'rotalar' && (
   <section className="section">
-    <h2>🛣️ Detaylı Rota Bilgileri</h2>
+    <h2> Detaylı Rota Bilgileri</h2>
     <table className="table">
       <thead>
         <tr>
@@ -518,7 +518,7 @@ const generateColor = (index) => {
 )}
         {activeTab === 'istasyonlar' && (
           <section className="section">
-            <h2>🏢 İstasyonlar</h2>
+            <h2> İstasyonlar</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -544,7 +544,7 @@ const generateColor = (index) => {
 
         {activeTab === 'araclar' && (
           <section className="section">
-            <h2>🚗 Araçlar</h2>
+            <h2> Araçlar</h2>
             <table className="table">
               <thead>
                 <tr>
