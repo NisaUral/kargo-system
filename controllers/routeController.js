@@ -396,7 +396,89 @@ const saveParameters = async (req, res) => {
   }
 };
 
-module.exports = { calculateRoutes, getAllRoutes, getMyRoutes, addStation, rentVehicle, deleteStation, deleteVehicle, saveParameters };
+const analyzeScenario = async (req, res) => {
+  try {
+    // Tüm rotaları getir
+    const [routes] = await db.query(`
+      SELECT 
+        r.vehicle_id,
+        r.stations,
+        r.total_distance_km,
+        r.total_weight_kg,
+        r.total_cost,
+        COUNT(s.id) as cargo_count
+      FROM routes r
+      LEFT JOIN shipments s ON r.id = s.route_id
+      GROUP BY r.id
+    `);
+
+    // Tüm istasyonları getir
+    const [stations] = await db.query('SELECT id, name FROM stations');
+
+    // İstasyon-araç dağılımı analizi
+    const analysis = {
+      totalScenario: {
+        totalCargo: 0,
+        totalWeight: 0,
+        totalDistance: 0,
+        totalCost: 0,
+        vehiclesUsed: 0
+      },
+      vehicleDetails: [],
+      stationDistribution: {},
+      costPerVehicle: [],
+      costPerKg: 0,
+      costPerKm: 0
+    };
+
+    routes.forEach((route, idx) => {
+      analysis.totalScenario.totalCargo += route.cargo_count;
+      analysis.totalScenario.totalWeight += route.total_weight_kg;
+      analysis.totalScenario.totalDistance += route.total_distance_km;
+      analysis.totalScenario.totalCost += parseFloat(route.total_cost);
+      
+      const stations_array = route.stations.split(',').map(s => parseInt(s));
+      analysis.vehicleDetails.push({
+        vehicleId: route.vehicle_id,
+        stations: stations_array.length,
+        distance: route.total_distance_km,
+        weight: route.total_weight_kg,
+        cost: route.total_cost,
+        cargoCount: route.cargo_count,
+        costPerKg: (parseFloat(route.total_cost) / route.total_weight_kg).toFixed(2),
+        utilization: ((route.total_weight_kg / 500) * 100).toFixed(1) + '%'
+      });
+
+      // İstasyon dağılımı
+      stations_array.forEach(stationId => {
+        if (!analysis.stationDistribution[stationId]) {
+          analysis.stationDistribution[stationId] = {
+            stationName: stations.find(s => s.id === stationId)?.name || `Station ${stationId}`,
+            vehiclesAssigned: 0,
+            cargoCount: 0,
+            totalWeight: 0
+          };
+        }
+        analysis.stationDistribution[stationId].vehiclesAssigned++;
+      });
+    });
+
+    analysis.totalScenario.vehiclesUsed = routes.length;
+    analysis.costPerKg = (analysis.totalScenario.totalCost / analysis.totalScenario.totalWeight).toFixed(4);
+    analysis.costPerKm = (analysis.totalScenario.totalCost / analysis.totalScenario.totalDistance).toFixed(4);
+
+    res.json({
+      success: true,
+      analysis: analysis
+    });
+
+  } catch (error) {
+    console.error('Scenario analysis error:', error);
+    res.status(500).json({ error: 'Senaryo analizi yapılamadı!' });
+  }
+};
+
+module.exports = { calculateRoutes, getAllRoutes, getMyRoutes, addStation, rentVehicle, deleteStation, deleteVehicle, saveParameters ,analyzeScenario};
 
 
 

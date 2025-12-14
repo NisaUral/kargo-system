@@ -9,7 +9,8 @@ const {
   rentVehicle,
   deleteStation,  // ✅ EKLE
   deleteVehicle,
-  saveParameters
+  saveParameters,
+  analyzeScenario
 } = require('../controllers/routeController');
 const router = express.Router();
 
@@ -17,6 +18,7 @@ const router = express.Router();
 router.post('/calculate', verifyToken, calculateRoutes);
 router.get('/all', verifyToken, getAllRoutes);
 router.get('/my-routes', verifyToken, getMyRoutes);
+router.get('/scenario-analysis', verifyToken, analyzeScenario);
 
 // ✅ PATH'LERİ DÜZELT - /api/routes/... olmayacak
 router.post('/add-station', verifyToken, addStation);

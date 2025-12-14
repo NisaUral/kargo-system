@@ -52,7 +52,6 @@ function RouteLines({ routePolylines }) {
     if (routePolylines && routePolylines.length > 0 && map) {
       console.log(`🎨 RouteLines: ${routePolylines.length} polyline eklenecek`);
       
-      // Eski polylines'ı kaldır
       map.eachLayer(layer => {
         if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
           map.removeLayer(layer);
@@ -94,11 +93,13 @@ function Admin() {
   const [newStation, setNewStation] = useState({ name: '', latitude: '', longitude: '' });
   const [newVehicle, setNewVehicle] = useState({ name: '', capacity_kg: '', rental_cost: '' });
   const [message, setMessage] = useState('');
+  const [scenarioAnalysis, setScenarioAnalysis] = useState(null);
+  const [problemType, setProblemType] = useState('unlimited');
   const [parameters, setParameters] = useState({
-  fuel_price_per_liter: 1,
-  km_cost: 1,
-  rental_cost_new_vehicle: 200
-});
+    fuel_price_per_liter: 1,
+    km_cost: 1,
+    rental_cost_new_vehicle: 200
+  });
   const [stats, setStats] = useState({
     totalCost: 0,
     vehiclesUsed: 0,
@@ -107,142 +108,145 @@ function Admin() {
   });
 
   const addStation = async (e) => {
-  e.preventDefault();
-  if (!newStation.name || !newStation.latitude || !newStation.longitude) {
-    setMessage('Tüm alanları doldurunuz!');
-    return;
-  }
+    e.preventDefault();
+    if (!newStation.name || !newStation.latitude || !newStation.longitude) {
+      setMessage('Tüm alanları doldurunuz!');
+      return;
+    }
 
-  try {
-    const response = await axios.post(
-      `${API_URL}/routes/add-station`,  // ✅ DOĞRU!
-      newStation,
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
+    try {
+      await axios.post(
+        `${API_URL}/routes/add-station`,
+        newStation,
+        {
+          headers: {
+            'Authorization': `Bearer ${ADMIN_TOKEN}`
+          }
         }
-      }
-    );
+      );
 
-    setMessage('✅ İstasyon başarıyla eklendi!');
-    setNewStation({ name: '', latitude: '', longitude: '' });
-    loadStations();
-    setTimeout(() => setMessage(''), 3000);
-  } catch (error) {
-    setMessage('❌ ' + (error.response?.data?.error || 'İstasyon eklenemedi!'));
-  }
-};
+      setMessage('✅ İstasyon başarıyla eklendi!');
+      setNewStation({ name: '', latitude: '', longitude: '' });
+      loadStations();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage('❌ ' + (error.response?.data?.error || 'İstasyon eklenemedi!'));
+    }
+  };
 
-// Araç kirala
-// Araç kirala
-const rentVehicle = async (e) => {
-  e.preventDefault();
-  if (!newVehicle.name || !newVehicle.capacity_kg) {  // ✅ fuel_consumption kontrolü sil
-    setMessage('Tüm alanları doldurunuz!');
-    return;
-  }
-
-  try {
-    const response = await axios.post(
-      `${API_URL}/routes/rent-vehicle`,
-      {
-        name: newVehicle.name,
-        capacity_kg: parseInt(newVehicle.capacity_kg),
-        rental_cost: parseInt(newVehicle.rental_cost) || 200,
-        fuel_consumption: parseFloat(newVehicle.fuel_consumption)
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
+  const loadScenarioAnalysis = async () => {
+    try {
+      const response = await axios.get(
+        `${API_URL}/routes/scenario-analysis`,
+        {
+          headers: {
+            'Authorization': `Bearer ${ADMIN_TOKEN}`
+          }
         }
-      }
-    );
+      );
+      setScenarioAnalysis(response.data.analysis);
+      setMessage('✅ Senaryo analizi yüklendi!');
+    } catch (error) {
+      setMessage('❌ Analiz yüklenemedi!');
+    }
+  };
 
-    setMessage('✅ Araç başarıyla kiralandı!');
-    setNewVehicle({ name: '', capacity_kg: '', rental_cost: '', fuel_consumption: '' });
-    loadVehicles();
-    setTimeout(() => setMessage(''), 3000);
-  } catch (error) {
-    setMessage('❌ ' + (error.response?.data?.error || 'Araç kiralama başarısız!'));
-  }
-};
+  const rentVehicle = async (e) => {
+    e.preventDefault();
+    if (!newVehicle.name || !newVehicle.capacity_kg) {
+      setMessage('Tüm alanları doldurunuz!');
+      return;
+    }
 
-// İstasyon sil
-const deleteStation = async (stationId) => {
-  if (!window.confirm('Bu istasyonu silmek istediğinize emin misiniz?')) {
-    return;
-  }
-
-  try {
-    await axios.delete(
-      `${API_URL}/routes/stations/${stationId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
+    try {
+      await axios.post(
+        `${API_URL}/routes/rent-vehicle`,
+        {
+          name: newVehicle.name,
+          capacity_kg: parseInt(newVehicle.capacity_kg),
+          rental_cost: parseInt(newVehicle.rental_cost) || 200
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${ADMIN_TOKEN}`
+          }
         }
-      }
-    );
+      );
 
-    setMessage('✅ İstasyon başarıyla silindi!');
-    loadStations();
-    setTimeout(() => setMessage(''), 3000);
-  } catch (error) {
-    setMessage('❌ ' + (error.response?.data?.error || 'İstasyon silinemedi!'));
-  }
-};
+      setMessage('✅ Araç başarıyla kiralandı!');
+      setNewVehicle({ name: '', capacity_kg: '', rental_cost: '' });
+      loadVehicles();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage('❌ ' + (error.response?.data?.error || 'Araç kiralama başarısız!'));
+    }
+  };
 
-// Araç sil
-const deleteVehicle = async (vehicleId) => {
-  if (!window.confirm('Bu aracı silmek istediğinize emin misiniz?')) {
-    return;
-  }
+  const deleteStation = async (stationId) => {
+    if (!window.confirm('Bu istasyonu silmek istediğinize emin misiniz?')) {
+      return;
+    }
 
-  try {
-    await axios.delete(
-      `${API_URL}/routes/vehicles/${vehicleId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
+    try {
+      await axios.delete(
+        `${API_URL}/routes/stations/${stationId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${ADMIN_TOKEN}`
+          }
         }
-      }
-    );
+      );
 
-    setMessage('✅ Araç başarıyla silindi!');
-    loadVehicles();
-    setTimeout(() => setMessage(''), 3000);
-  } catch (error) {
-    setMessage('❌ ' + (error.response?.data?.error || 'Araç silinemedi!'));
-  }
-};
+      setMessage('✅ İstasyon başarıyla silindi!');
+      loadStations();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage('❌ ' + (error.response?.data?.error || 'İstasyon silinemedi!'));
+    }
+  };
+
+  const deleteVehicle = async (vehicleId) => {
+    if (!window.confirm('Bu aracı silmek istediğinize emin misiniz?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(
+        `${API_URL}/routes/vehicles/${vehicleId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${ADMIN_TOKEN}`
+          }
+        }
+      );
+
+      setMessage('✅ Araç başarıyla silindi!');
+      loadVehicles();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage('❌ ' + (error.response?.data?.error || 'Araç silinemedi!'));
+    }
+  };
+
   useEffect(() => {
     loadStations();
     loadVehicles();
   }, []);
 
   useEffect(() => {
-  if (activeTab === 'dashboard') {
-    console.log('📍 Dashboard açıldı');
-    setAllRoutePolylines([]); 
-    setRoutePolylines([]);
-    
-    if (stations.length > 0) {
-      console.log('📍 loadAllRoutes çağrılıyor');
-      loadAllRoutes();
-    } else {
-      console.log('⚠️ Stations yüklenmedi!');
+    if (activeTab === 'dashboard') {
+      console.log('📍 Dashboard açıldı');
+      setAllRoutePolylines([]);
+      setRoutePolylines([]);
+      
+      if (stations.length > 0) {
+        console.log('📍 loadAllRoutes çağrılıyor');
+        loadAllRoutes();
+      } else {
+        console.log('⚠️ Stations yüklenmedi!');
+      }
     }
-  }
-}, [activeTab, stations]);
-
-  // Dashboard açılırken haritayı sıfırla
-useEffect(() => {
-  if (activeTab === 'dashboard') {
-    setAllRoutePolylines([]); // Harita temizle
-    if (stations.length > 0) {
-      loadAllRoutes();
-    }
-  }
-}, [activeTab]);
+  }, [activeTab, stations]);
 
   const loadStations = async () => {
     try {
@@ -262,270 +266,195 @@ useEffect(() => {
     }
   };
 
-  const drawRoutesOnMap = (routesList) => {
-  const colors = ['#27ae60', '#e74c3c', '#f39c12', '#3498db', '#9b59b6'];
-  
-  const routeLines = routesList.map((route, idx) => {
-    const coordinates = route.stations
-      .map(stationId => {
-        if (stationId === 13) {
-          return [40.8667, 29.85];
-        }
-        
-        const station = stations.find(s => s.id === stationId);
-        if (!station) return null;
-        return [parseFloat(station.latitude), parseFloat(station.longitude)];
-      })
-      .filter(c => c !== null);
+  const drawAllRoutesWithData = (routesToDraw) => {
+    console.log('🎨 drawAllRoutesWithData içinde, routes:', routesToDraw);
     
-    if (coordinates.length === 0) return null;
-    
-    return {
-      positions: coordinates,
-      color: colors[idx % colors.length],
-      weight: 3,
-      opacity: 0.7,
-      dashArray: '5, 5'
-    };
-  })
-  .filter(line => line !== null);
-  
-  setRoutePolylines(routeLines);
-};
+    if (!routesToDraw || routesToDraw.length === 0) {
+      console.log('⚠️ Routes boş!');
+      return;
+    }
 
-  // Tüm rotaları yükle
-const loadAllRoutes = async () => {
-  try {
-    console.log('📍 loadAllRoutes başlıyor...');
-    const response = await axios.get(`${API_URL}/routes/all`, {
-      headers: {
-        'Authorization': `Bearer ${ADMIN_TOKEN}`
+    const newPolylines = [];
+
+    routesToDraw.forEach((route, routeIndex) => {
+      console.log(`📍 Route ${routeIndex}:`, route);
+
+      let stationsArray = route.stations;
+      if (typeof route.stations === 'string') {
+        stationsArray = route.stations.split(',').map(s => parseInt(s));
+      }
+      
+      const coordinates = stationsArray
+        .map(stationId => {
+          if (stationId === 0 || stationId === 13) {
+            return [40.8667, 29.85];
+          }
+          const station = stations.find(s => s.id === stationId);
+          return station ? [parseFloat(station.latitude), parseFloat(station.longitude)] : null;
+        })
+        .filter(coord => coord !== null);
+
+      if (coordinates.length > 0) {
+        const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
+        const color = colors[routeIndex % colors.length];
+
+        newPolylines.push({
+          positions: coordinates,
+          color: color,
+          weight: 4,
+          opacity: 0.8,
+          dashArray: '5, 5'
+        });
       }
     });
-    
-    console.log(' Routes geldi:', response.data.routes);
-    setAllRoutes(response.data.routes); // State update
-    
-    drawAllRoutesWithData(response.data.routes);
-    
-  } catch (error) {
-    console.error('Error loading all routes:', error);
-  }
-};
 
-// Yeni fonksiyon
-const drawAllRoutesWithData = (routesToDraw) => {
-  console.log(' drawAllRoutesWithData içinde, routes:', routesToDraw);
-  
-  if (!routesToDraw || routesToDraw.length === 0) {
-    console.log(' Routes boş!');
-    return;
-  }
+    setAllRoutePolylines(newPolylines);
+  };
 
-  const newPolylines = [];
-
-  routesToDraw.forEach((route, routeIndex) => {
-    console.log(` Route ${routeIndex}:`, route);
-    console.log(` Route ${routeIndex} stations:`, route.stations); // 👈 EKLE
-    console.log(` Route ${routeIndex} stations type:`, typeof route.stations); // 👈 EKLE
-
-     let stationsArray = route.stations;
-    if (typeof route.stations === 'string') {
-      stationsArray = route.stations.split(',').map(s => parseInt(s));
-      console.log(` Route ${routeIndex} parsed to array:`, stationsArray);
-    }
-    
-    const coordinates = route.stations
-      .map(stationId => {
-        console.log(` Processing stationId ${stationId}`); // 👈 EKLE
-        if (stationId === 0 || stationId === 13) {
-          return [40.8667, 29.85];
-        }
-        const station = stations.find(s => s.id === stationId);
-        return station ? [parseFloat(station.latitude), parseFloat(station.longitude)] : null;
-      })
-      .filter(coord => coord !== null);
-
-    console.log(` Final coordinates route ${routeIndex}:`, coordinates); // 👈 EKLE
-
-    if (coordinates.length > 0) {
-      const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
-      const color = colors[routeIndex % colors.length];
-
-      newPolylines.push({
-        positions: coordinates,
-        color: color,
-        weight: 4,
-        opacity: 0.8,
-        dashArray: '5, 5'
-      });
-    }
-  });
-
-  setAllRoutePolylines(newPolylines);
-};
-const colors = ['red', 'blue', 'green', 'orange', 'purple', 'yellow', 'pink', 'cyan'];
-
-// YENİ KOD (sınırsız renk)
-const generateColor = (index) => {
-  const hue = (index * 60) % 360; // Her araç için farklı hue
-  return `hsl(${hue}, 70%, 50%)`;
-};
-  // Tüm rotaları harita'ya çiz
-  const drawAllRoutes = () => {
-  console.log('🎨 drawAllRoutes içinde, allRoutes:', allRoutes);
-  if (!allRoutes || allRoutes.length === 0) {
-    console.log('⚠️ allRoutes boş!');
-    return;
-  }
-
-  const newPolylines = [];
-
-  allRoutes.forEach((route, routeIndex) => {
-    console.log(`🎨 Route ${routeIndex}:`, route);
-    
-    const coordinates = route.stations
-      .map(stationId => {
-        if (stationId === 0 || stationId === 13) {
-          return [40.8667, 29.85]; // University
-        }
-        const station = stations.find(s => s.id === stationId);
-        return station ? [parseFloat(station.latitude), parseFloat(station.longitude)] : null;
-      })
-      .filter(coord => coord !== null);
-
-    console.log(`📍 Coordinates için route ${routeIndex}:`, coordinates);
-
-    if (coordinates.length > 0) {
-      const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
-      const color = colors[routeIndex % colors.length];
-
-      const polylineObj = {
-        positions: coordinates,
-        color: color,
-        weight: 4,
-        opacity: 0.8,
-        dashArray: '5, 5'
-      };
-
-      console.log(`✅ Polyline oluşturuldu route ${routeIndex}:`, polylineObj);
-      newPolylines.push(polylineObj);
-    }
-  });
-
-  console.log('📦 Toplam newPolylines:', newPolylines);
-  setAllRoutePolylines(newPolylines);
-};
-
-  const calculateRoutes = async () => {
-  setLoading(true);
-  try {
-    console.log('🚀 Calculating routes...');
-    
-    const response = await axios.post(
-      `${API_URL}/routes/calculate`,
-      { problem_type: 'unlimited' },
-      {
+  const loadAllRoutes = async () => {
+    try {
+      console.log('📍 loadAllRoutes başlıyor...');
+      const response = await axios.get(`${API_URL}/routes/all`, {
         headers: {
           'Authorization': `Bearer ${ADMIN_TOKEN}`
         }
-      }
-    );
-
-    console.log('✅ Routes calculated:', response.data);
-    setRoutes(response.data.routes);
-    setStats({
-      totalCost: parseFloat(response.data.totalCost),
-      vehiclesUsed: response.data.vehiclesUsed,
-      totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
-      totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
-    });
-
-    // BURAYI EKLE:
-    loadAllRoutes(); // Yeni rotaları yükle
-
-  } catch (error) {
-    console.error('Error calculating routes:', error);
-    alert('Rota hesaplanırken hata oluştu: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
-  useEffect(() => {
-    if (routes.length > 0 && stations.length > 0) {
-      const timer = setTimeout(() => {
-        drawRoutesOnMap(routes);
-      }, 100);
+      });
       
-      return () => clearTimeout(timer);
+      console.log('✅ Routes geldi:', response.data.routes);
+      setAllRoutes(response.data.routes);
+      drawAllRoutesWithData(response.data.routes);
+      
+    } catch (error) {
+      console.error('Error loading all routes:', error);
     }
-  }, [routes, stations]);
+  };
 
-  
+  const calculateRoutes = async () => {
+    setLoading(true);
+    try {
+      console.log('🚀 Calculating routes with type:', problemType);
+      
+      const response = await axios.post(
+        `${API_URL}/routes/calculate`,
+        { problem_type: problemType },
+        {
+          headers: {
+            'Authorization': `Bearer ${ADMIN_TOKEN}`
+          }
+        }
+      );
+
+      console.log('✅ Routes calculated:', response.data);
+      setRoutes(response.data.routes);
+      setStats({
+        totalCost: parseFloat(response.data.totalCost),
+        vehiclesUsed: response.data.vehiclesUsed,
+        totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
+        totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
+      });
+
+      loadAllRoutes();
+
+    } catch (error) {
+      console.error('Error calculating routes:', error);
+      alert('Rota hesaplanırken hata oluştu: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="admin-container">
       <div className="sidebar">
         <h2>📊 Admin</h2>
         <nav>
-  <button
-    className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-    onClick={() => setActiveTab('dashboard')}
-  >
-    Dashboard
-  </button>
-  <button
-    className={`nav-btn ${activeTab === 'rotalar' ? 'active' : ''}`}
-    onClick={() => setActiveTab('rotalar')}
-  >
-    Rotalar
-  </button>
-  
-  {/* YENİ BUTONLAR */}
-  <button
-    className={`nav-btn ${activeTab === 'station-add' ? 'active' : ''}`}
-    onClick={() => setActiveTab('station-add')}
-  >
-    ➕ İstasyon Ekle
-  </button>
-  <button
-    className={`nav-btn ${activeTab === 'vehicle-rent' ? 'active' : ''}`}
-    onClick={() => setActiveTab('vehicle-rent')}
-  >
-    🚗 Araç Kirala
-  </button>
-  
-  <button
-    className={`nav-btn ${activeTab === 'istasyonlar' ? 'active' : ''}`}
-    onClick={() => setActiveTab('istasyonlar')}
-  >
-    İstasyonlar
-  </button>
-  <button
-    className={`nav-btn ${activeTab === 'araclar' ? 'active' : ''}`}
-    onClick={() => setActiveTab('araclar')}
-  >
-    Araçlar
-  </button>
-  <a href="/" className="nav-btn">🚪 Çıkış</a>
-</nav>
+          <button
+            className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            Dashboard
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'rotalar' ? 'active' : ''}`}
+            onClick={() => setActiveTab('rotalar')}
+          >
+            Rotalar
+          </button>
+          
+          <button
+            className={`nav-btn ${activeTab === 'station-add' ? 'active' : ''}`}
+            onClick={() => setActiveTab('station-add')}
+          >
+            ➕ İstasyon Ekle
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'vehicle-rent' ? 'active' : ''}`}
+            onClick={() => setActiveTab('vehicle-rent')}
+          >
+            🚗 Araç Kirala
+          </button>
+          
+          <button
+            className={`nav-btn ${activeTab === 'istasyonlar' ? 'active' : ''}`}
+            onClick={() => setActiveTab('istasyonlar')}
+          >
+            İstasyonlar
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'araclar' ? 'active' : ''}`}
+            onClick={() => setActiveTab('araclar')}
+          >
+            Araçlar
+          </button>
+          <a href="/" className="nav-btn">🚪 Çıkış</a>
+        </nav>
       </div>
 
       <div className="main-content">
         <div className="header">
           <h1>Kargo İşletme Sistemi - Admin Paneli</h1>
-          <button 
-            className="btn btn-success" 
-            onClick={calculateRoutes}
-            disabled={loading}
-          >
-            {loading ? ' Hesaplanıyor...' : ' Rota Planla'}
-          </button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <select 
+              value={problemType}
+              onChange={(e) => setProblemType(e.target.value)}
+              style={{ padding: '8px 12px', fontSize: '14px', borderRadius: '4px' }}
+            >
+              <option value="unlimited">🔓 Sınırsız Araç</option>
+              <option value="fixed">🔒 3 Araç Sınırı</option>
+            </select>
+            
+            <button 
+              className="btn btn-success" 
+              onClick={calculateRoutes}
+              disabled={loading}
+            >
+              {loading ? '⏳ Hesaplanıyor...' : '🚀 Rota Planla'}
+            </button>
+            
+            <button 
+              className="btn btn-info"
+              onClick={loadScenarioAnalysis}
+            >
+              📊 Senaryo Analizi
+            </button>
+          </div>
         </div>
+
+        {message && (
+          <div style={{
+            padding: '12px',
+            marginBottom: '20px',
+            borderRadius: '4px',
+            backgroundColor: message.includes('✅') ? '#d4edda' : '#f8d7da',
+            color: message.includes('✅') ? '#155724' : '#721c24'
+          }}>
+            {message}
+          </div>
+        )}
 
         {activeTab === 'dashboard' && (
           <section className="section">
-            <h2> Harita Görünümü - Tüm Rotalar</h2>
+            <h2>📍 Harita Görünümü - Tüm Rotalar</h2>
             
             {stations.length > 0 && (
               <div style={{ 
@@ -605,271 +534,326 @@ const generateColor = (index) => {
                 )}
               </tbody>
             </table>
+
+            {scenarioAnalysis && (
+              <div style={{ marginTop: '30px', backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px' }}>
+                <h3>📊 Senaryo Analizi</h3>
+                <table className="table">
+                  <tbody>
+                    <tr>
+                      <td>Toplam Kargo:</td>
+                      <td><strong>{scenarioAnalysis.totalScenario.totalCargo}</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Toplam Ağırlık:</td>
+                      <td><strong>{scenarioAnalysis.totalScenario.totalWeight} kg</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Toplam Mesafe:</td>
+                      <td><strong>{parseFloat(scenarioAnalysis.totalScenario.totalDistance).toFixed(2)} km</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Toplam Maliyet:</td>
+                      <td><strong>₺{scenarioAnalysis.totalScenario.totalCost.toFixed(2)}</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Kullanılan Araç:</td>
+                      <td><strong>{scenarioAnalysis.totalScenario.vehiclesUsed}</strong></td>
+                    </tr>
+                    <tr>
+                      <td>Kg Başına Maliyet:</td>
+                      <td><strong>₺{scenarioAnalysis.costPerKg}</strong></td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <h4 style={{ marginTop: '20px' }}>🚗 Araç Detayları</h4>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Araç ID</th>
+                      <th>İstasyon #</th>
+                      <th>Mesafe (km)</th>
+                      <th>Ağırlık (kg)</th>
+                      <th>Maliyet (₺)</th>
+                      <th>Kullanım %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scenarioAnalysis.vehicleDetails.map((v, idx) => (
+  <tr key={idx}>
+    <td>{v.vehicleId}</td>
+    <td>{v.stations}</td>
+    <td>{parseFloat(v.distance).toFixed(2)}</td>
+    <td>{v.weight}</td>
+    <td>{v.cost}</td>
+    <td>{v.utilization}</td>
+  </tr>
+))}
+                  </tbody>
+                </table>
+
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => window.print()}
+                  style={{ marginTop: '20px' }}
+                >
+                  🖨️ Analizi Yazdır
+                </button>
+              </div>
+            )}
           </section>
         )}
 
         {activeTab === 'rotalar' && (
-        <section className="section">
-        <h2> Detaylı Rota Bilgileri</h2>
-        <table className="table">
-        <thead>
-        <tr>
-          <th>Araç ID</th>
-          <th>Rota (İstasyonlar)</th>
-          <th>Kargo Sayısı</th>
-          <th>Ağırlık (kg)</th>
-          <th>Maliyet (₺)</th>
-         </tr>
-         </thead>
-         <tbody>
-          {allRoutes.length === 0 ? (
-          <tr>
-            <td colSpan="5" style={{ textAlign: 'center' }}>Rota yok</td>
-          </tr>
-           ) : (
-          allRoutes.map((route, idx) => (
-            <tr key={idx}>
-              <td>Araç {route.vehicleId}</td>
-              <td>
-                {route.stations
-                  .map(stationId => {
-                    if (stationId === 13) return 'UNI';
-                    const station = stations.find(s => s.id === stationId);
-                    return station ? station.name.substring(0, 3) : `S${stationId}`;
-                  })
-                  .join(' → ')}
-              </td>
-              <td>{route.stations.filter(s => s !== 13).length}</td>
-              <td>{route.totalWeight} kg</td>
-              <td>₺ {route.totalCost}</td>
-            </tr>
-          ))
+          <section className="section">
+            <h2>🛣️ Detaylı Rota Bilgileri</h2>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Araç ID</th>
+                  <th>Rota (İstasyonlar)</th>
+                  <th>Kargo Sayısı</th>
+                  <th>Ağırlık (kg)</th>
+                  <th>Maliyet (₺)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allRoutes.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center' }}>Rota yok</td>
+                  </tr>
+                ) : (
+                  allRoutes.map((route, idx) => (
+                    <tr key={idx}>
+                      <td>Araç {route.vehicleId}</td>
+                      <td>
+                        {route.stations
+                          .map(stationId => {
+                            if (stationId === 13) return 'UNI';
+                            const station = stations.find(s => s.id === stationId);
+                            return station ? station.name.substring(0, 3) : `S${stationId}`;
+                          })
+                          .join(' → ')}
+                      </td>
+                      <td>{route.stations.filter(s => s !== 13).length}</td>
+                      <td>{route.totalWeight} kg</td>
+                      <td>₺ {route.totalCost}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </section>
         )}
-      </tbody>
-    </table>
-  </section>
-)}
+
         {activeTab === 'istasyonlar' && (
-  <section className="section">
-    <h2>🏢 İstasyonlar</h2>
-    <table className="table">
-      <thead>
-        <tr>
-          <th>İD</th>
-          <th>İstasyon Adı</th>
-          <th>Enlem</th>
-          <th>Boylam</th>
-          <th>İşlem</th>
-        </tr>
-      </thead>
-      <tbody>
-        {stations.map(station => (
-          <tr key={station.id}>
-            <td>{station.id}</td>
-            <td>{station.name}</td>
-            <td>{parseFloat(station.latitude).toFixed(6)}</td>
-            <td>{parseFloat(station.longitude).toFixed(6)}</td>
-            <td>
-              <button 
-                className="btn btn-danger"
-                onClick={() => deleteStation(station.id)}
-              >
-                🗑️ Sil
+          <section className="section">
+            <h2>🏢 İstasyonlar</h2>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>İD</th>
+                  <th>İstasyon Adı</th>
+                  <th>Enlem</th>
+                  <th>Boylam</th>
+                  <th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stations.map(station => (
+                  <tr key={station.id}>
+                    <td>{station.id}</td>
+                    <td>{station.name}</td>
+                    <td>{parseFloat(station.latitude).toFixed(6)}</td>
+                    <td>{parseFloat(station.longitude).toFixed(6)}</td>
+                    <td>
+                      <button 
+                        className="btn btn-danger"
+                        onClick={() => deleteStation(station.id)}
+                      >
+                        🗑️ Sil
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        {activeTab === 'araclar' && (
+          <section className="section">
+            <h2>🚗 Araçlar</h2>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>İD</th>
+                  <th>Araç Adı</th>
+                  <th>Kapasite (kg)</th>
+                  <th>Durum</th>
+                  <th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vehicles.map(vehicle => (
+                  <tr key={vehicle.id}>
+                    <td>{vehicle.id}</td>
+                    <td>{vehicle.name}</td>
+                    <td>{vehicle.capacity_kg}</td>
+                    <td>{vehicle.status}</td>
+                    <td>
+                      <button 
+                        className="btn btn-danger"
+                        onClick={() => deleteVehicle(vehicle.id)}
+                      >
+                        🗑️ Sil
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        {activeTab === 'station-add' && (
+          <section className="section">
+            <h2>➕ Yeni İstasyon Ekle</h2>
+            <form onSubmit={addStation} style={{ maxWidth: '500px' }}>
+              <div className="form-group">
+                <label>İstasyon Adı:</label>
+                <input
+                  type="text"
+                  value={newStation.name}
+                  onChange={(e) => setNewStation({...newStation, name: e.target.value})}
+                  placeholder="Örn: Yeni İlçe"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Enlem (Latitude):</label>
+                <input
+                  type="number"
+                  step="0.000001"
+                  value={newStation.latitude}
+                  onChange={(e) => setNewStation({...newStation, latitude: parseFloat(e.target.value)})}
+                  placeholder="40.8667"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Boylam (Longitude):</label>
+                <input
+                  type="number"
+                  step="0.000001"
+                  value={newStation.longitude}
+                  onChange={(e) => setNewStation({...newStation, longitude: parseFloat(e.target.value)})}
+                  placeholder="29.85"
+                  required
+                />
+              </div>
+
+              <button type="submit" className="btn btn-success">
+                ➕ İstasyon Ekle
               </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </section>
-)}
+            </form>
+          </section>
+        )}
 
-       {activeTab === 'araclar' && (
-  <section className="section">
-    <h2>🚗 Araçlar</h2>
-    <table className="table">
-      <thead>
-        <tr>
-          <th>İD</th>
-          <th>Araç Adı</th>
-          <th>Kapasite (kg)</th>
-          <th>Durum</th>
-          <th>İşlem</th>
-        </tr>
-      </thead>
-      <tbody>
-        {vehicles.map(vehicle => (
-          <tr key={vehicle.id}>
-            <td>{vehicle.id}</td>
-            <td>{vehicle.name}</td>
-            <td>{vehicle.capacity_kg}</td>
-            <td>{vehicle.status}</td>
-            <td>
+        {activeTab === 'vehicle-rent' && (
+          <section className="section">
+            <h2>🚗 Araç Kirala</h2>
+            
+            <div style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+              <h3>Sistem Parametreleri</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div className="form-group">
+                  <label>💧 Yakıt Fiyatı (₺/L):</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={parameters.fuel_price_per_liter}
+                    onChange={(e) => setParameters({...parameters, fuel_price_per_liter: parseFloat(e.target.value)})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>🛣️ Km Maliyeti (₺/km):</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={parameters.km_cost}
+                    onChange={(e) => setParameters({...parameters, km_cost: parseFloat(e.target.value)})}
+                  />
+                </div>
+              </div>
               <button 
-                className="btn btn-danger"
-                onClick={() => deleteVehicle(vehicle.id)}
+                type="button"
+                className="btn btn-info"
+                onClick={async () => {
+                  try {
+                    await axios.post(
+                      `${API_URL}/routes/parameters`,
+                      parameters,
+                      {
+                        headers: {
+                          'Authorization': `Bearer ${ADMIN_TOKEN}`
+                        }
+                      }
+                    );
+                    setMessage('✅ Parametreler kaydedildi!');
+                    setTimeout(() => setMessage(''), 3000);
+                  } catch (error) {
+                    setMessage('❌ Parametreler kaydedilemedi!');
+                  }
+                }}
+                style={{ marginTop: '10px' }}
               >
-                🗑️ Sil
+                💾 Parametreleri Kaydet
               </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </section>
-)}
-        {message && (
-  <div style={{
-    padding: '12px',
-    marginBottom: '20px',
-    borderRadius: '4px',
-    backgroundColor: message.includes('✅') ? '#d4edda' : '#f8d7da',
-    color: message.includes('✅') ? '#155724' : '#721c24'
-  }}>
-    {message}
-  </div>
-)}
+            </div>
 
-{activeTab === 'station-add' && (
-  <section className="section">
-    <h2>➕ Yeni İstasyon Ekle</h2>
-    <form onSubmit={addStation} style={{ maxWidth: '500px' }}>
-      <div className="form-group">
-        <label>İstasyon Adı:</label>
-        <input
-          type="text"
-          value={newStation.name}
-          onChange={(e) => setNewStation({...newStation, name: e.target.value})}
-          placeholder="Örn: Yeni İlçe"
-          required
-        />
-      </div>
+            <form onSubmit={rentVehicle} style={{ maxWidth: '500px' }}>
+              <div className="form-group">
+                <label>Araç Adı:</label>
+                <input
+                  type="text"
+                  value={newVehicle.name}
+                  onChange={(e) => setNewVehicle({...newVehicle, name: e.target.value})}
+                  placeholder="Örn: Kiralandı Araç 4"
+                  required
+                />
+              </div>
 
-      <div className="form-group">
-        <label>Enlem (Latitude):</label>
-        <input
-          type="number"
-          step="0.000001"
-          value={newStation.latitude}
-          onChange={(e) => setNewStation({...newStation, latitude: parseFloat(e.target.value)})}
-          placeholder="40.8667"
-          required
-        />
-      </div>
+              <div className="form-group">
+                <label>Kapasite (kg):</label>
+                <input
+                  type="number"
+                  value={newVehicle.capacity_kg}
+                  onChange={(e) => setNewVehicle({...newVehicle, capacity_kg: e.target.value})}
+                  placeholder="500"
+                  required
+                />
+              </div>
 
-      <div className="form-group">
-        <label>Boylam (Longitude):</label>
-        <input
-          type="number"
-          step="0.000001"
-          value={newStation.longitude}
-          onChange={(e) => setNewStation({...newStation, longitude: parseFloat(e.target.value)})}
-          placeholder="29.85"
-          required
-        />
-      </div>
+              <div className="form-group">
+                <label>Kiralama Maliyeti (₺):</label>
+                <input
+                  type="number"
+                  value={newVehicle.rental_cost}
+                  onChange={(e) => setNewVehicle({...newVehicle, rental_cost: e.target.value})}
+                  placeholder="200"
+                />
+              </div>
 
-      <button type="submit" className="btn btn-success">
-        ➕ İstasyon Ekle
-      </button>
-    </form>
-  </section>
-)}
-
-{activeTab === 'vehicle-rent' && (
-  <section className="section">
-    <h2>🚗 Araç Kirala</h2>
-    
-    {/* Mevcut Parametreler - Düzenlenebilir */}
-    <div style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-      <h3>Sistem Parametreleri</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-        <div className="form-group">
-          <label>💧 Yakıt Fiyatı (₺/L):</label>
-          <input
-            type="number"
-            step="0.01"
-            value={parameters.fuel_price_per_liter}
-            onChange={(e) => setParameters({...parameters, fuel_price_per_liter: parseFloat(e.target.value)})}
-          />
-        </div>
-        <div className="form-group">
-          <label>🛣️ Km Maliyeti (₺/km):</label>
-          <input
-            type="number"
-            step="0.01"
-            value={parameters.km_cost}
-            onChange={(e) => setParameters({...parameters, km_cost: parseFloat(e.target.value)})}
-          />
-        </div>
-        
-      </div>
-      <button 
-        type="button"
-        className="btn btn-info"
-        onClick={async () => {
-  try {
-    await axios.post(
-      `${API_URL}/routes/parameters`,
-      parameters,
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
-        }
-      }
-    );
-    setMessage('✅ Parametreler kaydedildi!');
-    setTimeout(() => setMessage(''), 3000);
-  } catch (error) {
-    setMessage('❌ Parametreler kaydedilemedi!');
-  }
-}}
-        style={{ marginTop: '10px' }}
-      >
-        💾 Parametreleri Kaydet
-      </button>
-    </div>
-
-    {/* Araç Kirala Formu */}
-    <form onSubmit={rentVehicle} style={{ maxWidth: '500px' }}>
-      <div className="form-group">
-        <label>Araç Adı:</label>
-        <input
-          type="text"
-          value={newVehicle.name}
-          onChange={(e) => setNewVehicle({...newVehicle, name: e.target.value})}
-          placeholder="Örn: Kiralandı Araç 4"
-          required
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Kapasite (kg):</label>
-        <input
-          type="number"
-          value={newVehicle.capacity_kg}
-          onChange={(e) => setNewVehicle({...newVehicle, capacity_kg: e.target.value})}
-          placeholder="500"
-          required
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Kiralama Maliyeti (₺):</label>
-        <input
-          type="number"
-          value={newVehicle.rental_cost}
-          onChange={(e) => setNewVehicle({...newVehicle, rental_cost: e.target.value})}
-          placeholder="200"
-        />
-      </div>
-
-      <button type="submit" className="btn btn-success">
-        🚗 Araç Kirala
-      </button>
-    </form>
-  </section>
-)}
+              <button type="submit" className="btn btn-success">
+                🚗 Araç Kirala
+              </button>
+            </form>
+          </section>
+        )}
       </div>
     </div>
   );
