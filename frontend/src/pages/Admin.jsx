@@ -91,6 +91,10 @@ function Admin() {
   const [allRoutePolylines, setAllRoutePolylines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [map, setMap] = useState(null);
+  const [newStation, setNewStation] = useState({ name: '', latitude: '', longitude: '' });
+  const [newVehicle, setNewVehicle] = useState({ name: '', capacity_kg: '', rental_cost: '' });
+  const [message, setMessage] = useState('');
+  
   const [stats, setStats] = useState({
     totalCost: 0,
     vehiclesUsed: 0,
@@ -98,6 +102,114 @@ function Admin() {
     totalDistance: 0
   });
 
+  const addStation = async (e) => {
+  e.preventDefault();
+  if (!newStation.name || !newStation.latitude || !newStation.longitude) {
+    setMessage('Tüm alanları doldurunuz!');
+    return;
+  }
+
+  try {
+    const response = await axios.post(
+      `${API_URL}/routes/add-station`,  // ✅ DOĞRU!
+      newStation,
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
+        }
+      }
+    );
+
+    setMessage('✅ İstasyon başarıyla eklendi!');
+    setNewStation({ name: '', latitude: '', longitude: '' });
+    loadStations();
+    setTimeout(() => setMessage(''), 3000);
+  } catch (error) {
+    setMessage('❌ ' + (error.response?.data?.error || 'İstasyon eklenemedi!'));
+  }
+};
+
+// Araç kirala
+// Araç kirala
+const rentVehicle = async (e) => {
+  e.preventDefault();
+  if (!newVehicle.name || !newVehicle.capacity_kg) {  // ✅ fuel_consumption kontrolü sil
+    setMessage('Tüm alanları doldurunuz!');
+    return;
+  }
+
+  try {
+    const response = await axios.post(
+      `${API_URL}/routes/rent-vehicle`,
+      {
+        name: newVehicle.name,
+        capacity_kg: parseInt(newVehicle.capacity_kg),
+        rental_cost: parseInt(newVehicle.rental_cost) || 200,
+        fuel_consumption: parseFloat(newVehicle.fuel_consumption)
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
+        }
+      }
+    );
+
+    setMessage('✅ Araç başarıyla kiralandı!');
+    setNewVehicle({ name: '', capacity_kg: '', rental_cost: '', fuel_consumption: '' });
+    loadVehicles();
+    setTimeout(() => setMessage(''), 3000);
+  } catch (error) {
+    setMessage('❌ ' + (error.response?.data?.error || 'Araç kiralama başarısız!'));
+  }
+};
+
+// İstasyon sil
+const deleteStation = async (stationId) => {
+  if (!window.confirm('Bu istasyonu silmek istediğinize emin misiniz?')) {
+    return;
+  }
+
+  try {
+    await axios.delete(
+      `${API_URL}/routes/stations/${stationId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
+        }
+      }
+    );
+
+    setMessage('✅ İstasyon başarıyla silindi!');
+    loadStations();
+    setTimeout(() => setMessage(''), 3000);
+  } catch (error) {
+    setMessage('❌ ' + (error.response?.data?.error || 'İstasyon silinemedi!'));
+  }
+};
+
+// Araç sil
+const deleteVehicle = async (vehicleId) => {
+  if (!window.confirm('Bu aracı silmek istediğinize emin misiniz?')) {
+    return;
+  }
+
+  try {
+    await axios.delete(
+      `${API_URL}/routes/vehicles/${vehicleId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
+        }
+      }
+    );
+
+    setMessage('✅ Araç başarıyla silindi!');
+    loadVehicles();
+    setTimeout(() => setMessage(''), 3000);
+  } catch (error) {
+    setMessage('❌ ' + (error.response?.data?.error || 'Araç silinemedi!'));
+  }
+};
   useEffect(() => {
     loadStations();
     loadVehicles();
@@ -345,37 +457,54 @@ const generateColor = (index) => {
     }
   }, [routes, stations]);
 
+  
+
   return (
     <div className="admin-container">
       <div className="sidebar">
         <h2>📊 Admin</h2>
         <nav>
-          <button
-            className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            Dashboard
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'rotalar' ? 'active' : ''}`}
-            onClick={() => setActiveTab('rotalar')}
-          >
-            Rotalar
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'istasyonlar' ? 'active' : ''}`}
-            onClick={() => setActiveTab('istasyonlar')}
-          >
-            İstasyonlar
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'araclar' ? 'active' : ''}`}
-            onClick={() => setActiveTab('araclar')}
-          >
-            Araçlar
-          </button>
-          <a href="/" className="nav-btn">Çıkış</a>
-        </nav>
+  <button
+    className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+    onClick={() => setActiveTab('dashboard')}
+  >
+    Dashboard
+  </button>
+  <button
+    className={`nav-btn ${activeTab === 'rotalar' ? 'active' : ''}`}
+    onClick={() => setActiveTab('rotalar')}
+  >
+    Rotalar
+  </button>
+  
+  {/* YENİ BUTONLAR */}
+  <button
+    className={`nav-btn ${activeTab === 'station-add' ? 'active' : ''}`}
+    onClick={() => setActiveTab('station-add')}
+  >
+    ➕ İstasyon Ekle
+  </button>
+  <button
+    className={`nav-btn ${activeTab === 'vehicle-rent' ? 'active' : ''}`}
+    onClick={() => setActiveTab('vehicle-rent')}
+  >
+    🚗 Araç Kirala
+  </button>
+  
+  <button
+    className={`nav-btn ${activeTab === 'istasyonlar' ? 'active' : ''}`}
+    onClick={() => setActiveTab('istasyonlar')}
+  >
+    İstasyonlar
+  </button>
+  <button
+    className={`nav-btn ${activeTab === 'araclar' ? 'active' : ''}`}
+    onClick={() => setActiveTab('araclar')}
+  >
+    Araçlar
+  </button>
+  <a href="/" className="nav-btn">🚪 Çıkış</a>
+</nav>
       </div>
 
       <div className="main-content">
@@ -476,24 +605,24 @@ const generateColor = (index) => {
         )}
 
         {activeTab === 'rotalar' && (
-  <section className="section">
-    <h2> Detaylı Rota Bilgileri</h2>
-    <table className="table">
-      <thead>
+        <section className="section">
+        <h2> Detaylı Rota Bilgileri</h2>
+        <table className="table">
+        <thead>
         <tr>
           <th>Araç ID</th>
           <th>Rota (İstasyonlar)</th>
           <th>Kargo Sayısı</th>
           <th>Ağırlık (kg)</th>
           <th>Maliyet (₺)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {allRoutes.length === 0 ? (
+         </tr>
+         </thead>
+         <tbody>
+          {allRoutes.length === 0 ? (
           <tr>
             <td colSpan="5" style={{ textAlign: 'center' }}>Rota yok</td>
           </tr>
-        ) : (
+           ) : (
           allRoutes.map((route, idx) => (
             <tr key={idx}>
               <td>Araç {route.vehicleId}</td>
@@ -517,56 +646,174 @@ const generateColor = (index) => {
   </section>
 )}
         {activeTab === 'istasyonlar' && (
-          <section className="section">
-            <h2> İstasyonlar</h2>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>İD</th>
-                  <th>İstasyon Adı</th>
-                  <th>Enlem</th>
-                  <th>Boylam</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stations.map(station => (
-                  <tr key={station.id}>
-                    <td>{station.id}</td>
-                    <td>{station.name}</td>
-                    <td>{parseFloat(station.latitude).toFixed(6)}</td>
-                    <td>{parseFloat(station.longitude).toFixed(6)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        )}
+  <section className="section">
+    <h2>🏢 İstasyonlar</h2>
+    <table className="table">
+      <thead>
+        <tr>
+          <th>İD</th>
+          <th>İstasyon Adı</th>
+          <th>Enlem</th>
+          <th>Boylam</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {stations.map(station => (
+          <tr key={station.id}>
+            <td>{station.id}</td>
+            <td>{station.name}</td>
+            <td>{parseFloat(station.latitude).toFixed(6)}</td>
+            <td>{parseFloat(station.longitude).toFixed(6)}</td>
+            <td>
+              <button 
+                className="btn btn-danger"
+                onClick={() => deleteStation(station.id)}
+              >
+                🗑️ Sil
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+)}
 
-        {activeTab === 'araclar' && (
-          <section className="section">
-            <h2> Araçlar</h2>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>İD</th>
-                  <th>Araç Adı</th>
-                  <th>Kapasite (kg)</th>
-                  <th>Durum</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vehicles.map(vehicle => (
-                  <tr key={vehicle.id}>
-                    <td>{vehicle.id}</td>
-                    <td>{vehicle.name}</td>
-                    <td>{vehicle.capacity_kg}</td>
-                    <td>{vehicle.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        )}
+       {activeTab === 'araclar' && (
+  <section className="section">
+    <h2>🚗 Araçlar</h2>
+    <table className="table">
+      <thead>
+        <tr>
+          <th>İD</th>
+          <th>Araç Adı</th>
+          <th>Kapasite (kg)</th>
+          <th>Durum</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {vehicles.map(vehicle => (
+          <tr key={vehicle.id}>
+            <td>{vehicle.id}</td>
+            <td>{vehicle.name}</td>
+            <td>{vehicle.capacity_kg}</td>
+            <td>{vehicle.status}</td>
+            <td>
+              <button 
+                className="btn btn-danger"
+                onClick={() => deleteVehicle(vehicle.id)}
+              >
+                🗑️ Sil
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+)}
+        {message && (
+  <div style={{
+    padding: '12px',
+    marginBottom: '20px',
+    borderRadius: '4px',
+    backgroundColor: message.includes('✅') ? '#d4edda' : '#f8d7da',
+    color: message.includes('✅') ? '#155724' : '#721c24'
+  }}>
+    {message}
+  </div>
+)}
+
+{activeTab === 'station-add' && (
+  <section className="section">
+    <h2>➕ Yeni İstasyon Ekle</h2>
+    <form onSubmit={addStation} style={{ maxWidth: '500px' }}>
+      <div className="form-group">
+        <label>İstasyon Adı:</label>
+        <input
+          type="text"
+          value={newStation.name}
+          onChange={(e) => setNewStation({...newStation, name: e.target.value})}
+          placeholder="Örn: Yeni İlçe"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Enlem (Latitude):</label>
+        <input
+          type="number"
+          step="0.000001"
+          value={newStation.latitude}
+          onChange={(e) => setNewStation({...newStation, latitude: parseFloat(e.target.value)})}
+          placeholder="40.8667"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Boylam (Longitude):</label>
+        <input
+          type="number"
+          step="0.000001"
+          value={newStation.longitude}
+          onChange={(e) => setNewStation({...newStation, longitude: parseFloat(e.target.value)})}
+          placeholder="29.85"
+          required
+        />
+      </div>
+
+      <button type="submit" className="btn btn-success">
+        ➕ İstasyon Ekle
+      </button>
+    </form>
+  </section>
+)}
+
+{activeTab === 'vehicle-rent' && (
+  <section className="section">
+    <h2>🚗 Araç Kirala</h2>
+    <form onSubmit={rentVehicle} style={{ maxWidth: '500px' }}>
+      <div className="form-group">
+        <label>Araç Adı:</label>
+        <input
+          type="text"
+          value={newVehicle.name}
+          onChange={(e) => setNewVehicle({...newVehicle, name: e.target.value})}
+          placeholder="Örn: Kiralandı Araç 4"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Kapasite (kg):</label>
+        <input
+          type="number"
+          value={newVehicle.capacity_kg}
+          onChange={(e) => setNewVehicle({...newVehicle, capacity_kg: e.target.value})}
+          placeholder="500"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Kiralama Maliyeti (₺):</label>
+        <input
+          type="number"
+          value={newVehicle.rental_cost}
+          onChange={(e) => setNewVehicle({...newVehicle, rental_cost: e.target.value})}
+          placeholder="200"
+        />
+      </div>
+
+      <button type="submit" className="btn btn-success">
+        🚗 Araç Kirala
+      </button>
+    </form>
+  </section>
+)}
       </div>
     </div>
   );
