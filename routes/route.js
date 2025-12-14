@@ -8,7 +8,8 @@ const {
   addStation, 
   rentVehicle,
   deleteStation,  // ✅ EKLE
-  deleteVehicle
+  deleteVehicle,
+  saveParameters
 } = require('../controllers/routeController');
 const router = express.Router();
 
@@ -22,5 +23,6 @@ router.post('/add-station', verifyToken, addStation);
 router.post('/rent-vehicle', verifyToken, rentVehicle);
 router.delete('/stations/:stationId', verifyToken, deleteStation);
 router.delete('/vehicles/:vehicleId', verifyToken, deleteVehicle);
+router.post('/parameters', verifyToken, saveParameters);
 
 module.exports = router;

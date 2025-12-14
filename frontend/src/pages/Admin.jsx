@@ -94,7 +94,11 @@ function Admin() {
   const [newStation, setNewStation] = useState({ name: '', latitude: '', longitude: '' });
   const [newVehicle, setNewVehicle] = useState({ name: '', capacity_kg: '', rental_cost: '' });
   const [message, setMessage] = useState('');
-  
+  const [parameters, setParameters] = useState({
+  fuel_price_per_liter: 1,
+  km_cost: 1,
+  rental_cost_new_vehicle: 200
+});
   const [stats, setStats] = useState({
     totalCost: 0,
     vehiclesUsed: 0,
@@ -775,6 +779,58 @@ const generateColor = (index) => {
 {activeTab === 'vehicle-rent' && (
   <section className="section">
     <h2>🚗 Araç Kirala</h2>
+    
+    {/* Mevcut Parametreler - Düzenlenebilir */}
+    <div style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+      <h3>Sistem Parametreleri</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div className="form-group">
+          <label>💧 Yakıt Fiyatı (₺/L):</label>
+          <input
+            type="number"
+            step="0.01"
+            value={parameters.fuel_price_per_liter}
+            onChange={(e) => setParameters({...parameters, fuel_price_per_liter: parseFloat(e.target.value)})}
+          />
+        </div>
+        <div className="form-group">
+          <label>🛣️ Km Maliyeti (₺/km):</label>
+          <input
+            type="number"
+            step="0.01"
+            value={parameters.km_cost}
+            onChange={(e) => setParameters({...parameters, km_cost: parseFloat(e.target.value)})}
+          />
+        </div>
+        
+      </div>
+      <button 
+        type="button"
+        className="btn btn-info"
+        onClick={async () => {
+  try {
+    await axios.post(
+      `${API_URL}/routes/parameters`,
+      parameters,
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
+        }
+      }
+    );
+    setMessage('✅ Parametreler kaydedildi!');
+    setTimeout(() => setMessage(''), 3000);
+  } catch (error) {
+    setMessage('❌ Parametreler kaydedilemedi!');
+  }
+}}
+        style={{ marginTop: '10px' }}
+      >
+        💾 Parametreleri Kaydet
+      </button>
+    </div>
+
+    {/* Araç Kirala Formu */}
     <form onSubmit={rentVehicle} style={{ maxWidth: '500px' }}>
       <div className="form-group">
         <label>Araç Adı:</label>

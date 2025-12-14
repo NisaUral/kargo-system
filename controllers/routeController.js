@@ -369,8 +369,34 @@ const deleteVehicle = async (req, res) => {
     res.status(500).json({ error: 'Araç silinemedi!' });
   }
 };
+// Parametreleri kaydet
+const saveParameters = async (req, res) => {
+  try {
+    const [user] = await db.query('SELECT role FROM users WHERE id = ?', [req.userId]);
+    
+    if (user[0]?.role !== 'admin') {
+      return res.status(403).json({ error: 'Sadece admin erişebilir!' });
+    }
 
-module.exports = { calculateRoutes, getAllRoutes, getMyRoutes, addStation, rentVehicle, deleteStation, deleteVehicle };
+    const { fuel_price_per_liter, km_cost, rental_cost_new_vehicle } = req.body;
+
+    // parameters tablosunu güncelle (ID=1)
+    await db.query(
+      'UPDATE parameters SET fuel_price_per_liter = ?, km_cost = ?, rental_cost_new_vehicle = ? WHERE id = 1',
+      [parseFloat(fuel_price_per_liter), parseFloat(km_cost), parseInt(rental_cost_new_vehicle)]
+    );
+
+    res.json({
+      success: true,
+      message: 'Parametreler kaydedildi!'
+    });
+  } catch (error) {
+    console.error('Save parameters error:', error);
+    res.status(500).json({ error: 'Parametreler kaydedilemedi!' });
+  }
+};
+
+module.exports = { calculateRoutes, getAllRoutes, getMyRoutes, addStation, rentVehicle, deleteStation, deleteVehicle, saveParameters };
 
 
 
