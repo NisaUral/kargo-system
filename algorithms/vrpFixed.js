@@ -138,11 +138,23 @@ class FixedVehicleVRP {
 selectOptimalStartingStation(availableStations) {
   console.log('[START-OPT-FIXED] Optimal başlangıç noktası aranıyor...');
   
+  // ✅ BOŞSA KONTROL ET
+  if (!availableStations || availableStations.length === 0) {
+    console.log('[START-OPT-FIXED] ⚠️ Kullanılabilir istasyon yok!');
+    return null;
+  }
+  
   let bestStation = availableStations[0];
   let bestScore = Infinity;
 
   availableStations.forEach(stationId => {
     const station = this.stations.find(s => s.id === stationId);
+    
+    // ✅ STATION BULUNAMADIYSA ATLA
+    if (!station) {
+      console.log(`[START-OPT-FIXED] ⚠️ Station ${stationId} bulunamadı!`);
+      return;
+    }
     
     const distToUni = this.getDistanceFromUniversity(station);
     const cargoWeight = this.cargoByStation[stationId]?.totalWeight || 0;
@@ -190,13 +202,24 @@ selectOptimalStartingStation(availableStations) {
     const currentVehicle = this.vehicles[vehicleIdx];
     const stationsForRoute = [...availableStations];
 
-    console.log(`\n[FIXED] 🚗 Araç ${vehicleIdx + 1}: Cap=${currentVehicle.capacity_kg}kg`);
+    console.log(`\n[FIXED] 🚗 Araç ${vehicleIdx + 1}: Cap=${currentVehicle.capacity_kg}kg, Kalan=${stationsForRoute.length}`);
 
-    // ✅ OPTIMAL BAŞLANGIÇ NOKTASINI SEÇ
+    // ✅ EĞER KARGO KALMADIYSA ATLA
+    if (stationsForRoute.length === 0) {
+      console.log(`[FIXED] ℹ️ Araç ${vehicleIdx + 1}: Kargo yok, atlanıyor`);
+      continue;
+    }
+
     const startingStation = this.selectOptimalStartingStation(stationsForRoute);
     
+    // ✅ BAŞLANGIÇ NOKTASI BOŞSA ATLA
+    if (!startingStation) {
+      console.log(`[FIXED] ℹ️ Araç ${vehicleIdx + 1}: Geçerli başlangıç noktası yok, atlanıyor`);
+      continue;
+    }
+    
     const route = this.nearestNeighborRoute(
-      startingStation,  // ✅ Optimal başlangıç
+      startingStation,
       stationsForRoute,
       currentVehicle
     );

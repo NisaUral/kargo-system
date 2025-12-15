@@ -833,43 +833,7 @@ const rejectCargo = async (cargoId) => {
             </table>
           </section>
         )}
-        {activeTab === 'dashboard' && autoAnalysis && (
-  <section className="section" style={{ backgroundColor: '#e3f2fd', borderLeft: '4px solid #2196f3', padding: '20px', marginBottom: '20px' }}>
-    <h3> Otomatik Problem Type Seçimi</h3>
-    <table style={{ width: '100%' }}>
-      <tbody>
-        <tr>
-          <td><strong>Toplam Kargo Ağırlığı:</strong></td>
-          <td>{autoAnalysis.totalWeight} kg</td>
-        </tr>
-        <tr>
-          <td><strong>Minimum Ağırlık Eşiği:</strong></td>
-          <td>{autoAnalysis.minCargoWeight} kg</td>
-        </tr>
-        <tr>
-          <td><strong>Seçilen Problem Type:</strong></td>
-          <td>
-            <span style={{ 
-              backgroundColor: autoAnalysis.selectedType === 'unlimited' ? '#ff9800' : '#4caf50',
-              color: 'white',
-              padding: '4px 12px',
-              borderRadius: '4px',
-              fontWeight: 'bold'
-            }}>
-              {autoAnalysis.selectedType === 'unlimited' ? ' Sınırsız Araç' : 
-               autoAnalysis.selectedType === 'fixed-3' ? ' 3 Araç' : 
-               autoAnalysis.selectedType === 'fixed-4' ? ' 4 Araç' : autoAnalysis.selectedType}
-            </span>
-          </td>
-        </tr>
-        <tr>
-          <td><strong>Karar Sebebi:</strong></td>
-          <td>{autoAnalysis.reason}</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
-)}
+       
 
         {activeTab === 'cargo-management' && (
   <section className="section">
