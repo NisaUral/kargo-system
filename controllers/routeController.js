@@ -17,7 +17,7 @@ const calculateRoutes = async (req, res) => {
       'SELECT id, name, capacity_kg, fuel_consumption, rental_cost FROM vehicles WHERE status = "active"'
     );
 
-    // Bekleyen kargo isteklerini getir
+    // Bekleyen kargo isteklerini getir (sadece pending)
     const [cargos] = await db.query(
       `SELECT cr.station_id, SUM(cr.cargo_count) as cargo_count, SUM(cr.cargo_weight_kg) as cargo_weight_kg
        FROM cargo_requests cr
@@ -35,7 +35,6 @@ const calculateRoutes = async (req, res) => {
       };
     });
    
-    // Eğer kargo yoksa
     if (Object.keys(cargoByStation).length === 0) {
       return res.json({
         message: 'Yönlendirilecek kargo yok',
@@ -44,47 +43,43 @@ const calculateRoutes = async (req, res) => {
       });
     }
 
-    // Maliyet parametreleri
+    // Parametreleri database'den getir
+    const [params] = await db.query('SELECT * FROM parameters WHERE id = 1');
     const costs = {
-      fuel_price_per_liter: 1,
-      km_cost: 1,
-      rental_cost_new_vehicle: 200,
+      fuel_price_per_liter: params[0]?.fuel_price_per_liter || 1,
+      km_cost: params[0]?.km_cost || 1,
+      rental_cost_new_vehicle: params[0]?.rental_cost_new_vehicle || 200,
       rental_capacity: 500
     };
 
     let result;
+    let vehicleCount = 3;
 
     if (problem_type === 'unlimited') {
       const vrp = new UnlimitedVehicleVRP(stations, vehicles, cargoByStation, costs);
       result = vrp.solve();
-    } else {
-      const vrp = new FixedVehicleVRP(stations, vehicles, cargoByStation, costs);
-      result = vrp.solve();
+    } else if (problem_type.startsWith('fixed-')) {
+      vehicleCount = parseInt(problem_type.split('-')[1]);
+      const selectedVehicles = vehicles.slice(0, vehicleCount);
+      
+      const vrp = new FixedVehicleVRP(selectedVehicles, stations, cargoByStation, costs);
+  result = vrp.solve();
+      
+      console.log(`[FIXED] ${vehicleCount} araç ile optimize edildi`);
     }
 
-    // ✅ RED KARGO İÇİN VERİTABANI KAYDI (yeni)
-    if (result.rejectedCargo && result.rejectedCargo.length > 0) {
-      for (const rejectedItem of result.rejectedCargo) {
-        // Reddedilen istasyondaki pending kargo'ları rejected'a çevir
-        await db.query(
-          `UPDATE cargo_requests 
-           SET status = 'rejected', rejection_reason = ?
-           WHERE station_id = ? AND status = 'pending'`,
-          [rejectedItem.reason, rejectedItem.stationId]
-        );
-        
-        console.log(`❌ Reddedildi: İstasyon ${rejectedItem.stationId} - ${rejectedItem.reason}`);
-      }
-    }
+    // ✅ RED KARGO İÇİN YALNIZCA KAYIT YAP, OTOMATİK RED YAPMA
+    // Admin tarafından manuel olarak red edilecek
+    console.log(`[ROUTES] Reddedilecek kargolar: ${result.rejectedCargo?.length || 0}`);
+    console.log(`[ROUTES] Kabul edilen rotalar: ${result.routes.length}`);
 
-    // Rotaları ve kargo atamalarını database'e kaydet
+    // Rotaları database'e kaydet
     for (const route of result.routes) {
       console.log(`📍 Inserting route - vehicleId: ${route.vehicleId}, stations: ${route.stations.join(',')}, weight: ${route.totalWeight}`);
       
-      // ÖNEMLİ: Üniversiteyi de ekle!
       const stationsWithUniversity = route.stations.includes(0) 
         ? route.stations 
-        : [...route.stations, 0]; // 0 = University
+        : [...route.stations, 0];
       
       const [routeResult] = await db.query(
         `INSERT INTO routes (vehicle_id, total_distance_km, total_weight_kg, fuel_cost, distance_cost, total_cost, stations) 
@@ -103,9 +98,8 @@ const calculateRoutes = async (req, res) => {
       console.log(`✅ Route inserted with ID: ${routeResult.insertId}, vehicle_id: ${route.vehicleId}`);
       const routeId = routeResult.insertId;
    
-      // Her istasyondaki kargo'ları shipments'e ekle
       for (const stationId of route.stations) {
-        if (stationId === 0) continue; // Üniversite, atla
+        if (stationId === 0) continue;
         
         const [cargosAtStation] = await db.query(
           `SELECT id FROM cargo_requests 
@@ -113,7 +107,6 @@ const calculateRoutes = async (req, res) => {
           [stationId]
         );
 
-        // Kargo'ları bu rotaya ata
         for (const cargo of cargosAtStation) {
           await db.query(
             `INSERT INTO shipments (cargo_request_id, route_id, vehicle_id, assigned_at)
@@ -121,7 +114,6 @@ const calculateRoutes = async (req, res) => {
             [cargo.id, routeId, route.vehicleId]
           );
 
-          // Kargo statusunu güncelle
           await db.query(
             `UPDATE cargo_requests SET status = 'assigned' WHERE id = ?`,
             [cargo.id]
@@ -130,15 +122,15 @@ const calculateRoutes = async (req, res) => {
       }
     }
 
-    // ✅ RESPONSE'A RED KARGO DETAYI EKLE
     res.json({
       success: true,
-      problem_type: problem_type || 'fixed',
+      problem_type: problem_type || 'fixed-3',
+      vehicle_count: vehicleCount,
       routes: result.routes,
       totalCost: result.totalCost,
       vehiclesUsed: result.vehiclesUsed,
       newVehiclesRented: result.newVehiclesRented,
-      rejectedCargo: result.rejectedCargo || [], // ✅ EKLE
+      suggestedRejectedCargo: result.rejectedCargo || [], // ✅ TAVSIYE OLARAK GÖR, OTOMATİK RED YAPMA
       acceptedWeight: result.acceptedWeight,
       rejectedWeight: result.rejectedWeight,
       acceptanceRate: result.acceptanceRate || 100,

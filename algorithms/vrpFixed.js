@@ -1,14 +1,14 @@
 const { haversineDistance, createDistanceMatrix } = require('./distanceCalculator');
 
 class FixedVehicleVRP {
-  constructor(stations, vehicles, cargoByStation, costs) {
-    this.stations = stations;
+  constructor(vehicles, stations, cargoByStation, costs) {  // ✅ stations parametresi EKLE
     this.vehicles = vehicles;
+    this.stations = stations;  // ✅ EKLE
     this.cargoByStation = cargoByStation;
     this.costs = costs;
-    this.distanceMatrix = createDistanceMatrix(stations);
+    this.distanceMatrix = createDistanceMatrix(stations);  // ✅ stations kullan
     this.university = { latitude: 40.8667, longitude: 29.85 };
-    this.rejectedCargo = []; // ✅ RED KARGO TRACK
+    this.rejectedCargo = [];
   }
 
   getDistanceFromUniversity(station) {

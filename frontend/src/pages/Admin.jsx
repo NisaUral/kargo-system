@@ -94,9 +94,10 @@ function Admin() {
   const [newVehicle, setNewVehicle] = useState({ name: '', capacity_kg: '', rental_cost: '' });
   const [message, setMessage] = useState('');
   const [scenarioAnalysis, setScenarioAnalysis] = useState(null);
-  const [problemType, setProblemType] = useState('unlimited');
+  const [problemType, setProblemType] = useState('auto');
   const [pendingCargos, setPendingCargos] = useState([]);
   const [rejectedCargo, setRejectedCargo] = useState([]);
+  const [autoAnalysis, setAutoAnalysis] = useState(null);
   const [parameters, setParameters] = useState({
     fuel_price_per_liter: 1,
     km_cost: 1,
@@ -371,47 +372,93 @@ const rejectCargo = async (cargoId) => {
     }
   };
 
-  const calculateRoutes = async () => {
-    setLoading(true);
-    try {
-      console.log('🚀 Calculating routes with type:', problemType);
-      
-      const response = await axios.post(
-        `${API_URL}/routes/calculate`,
-        { problem_type: problemType },
-        {
-          headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`
-          }
+ const calculateRoutes = async () => {
+  setLoading(true);
+  try {
+    console.log('🚀 Otomatik mod - Rota hesaplanıyor...');
+    
+    // Bekleyen kargo verilerini kontrol et
+    const cargoResponse = await axios.get(`${API_URL}/routes/pending-cargos`, {
+      headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+    });
+
+    const cargos = cargoResponse.data.data;
+    const totalWeight = cargos.reduce((sum, c) => sum + c.cargo_weight_kg, 0);
+    const totalCount = cargos.reduce((sum, c) => sum + c.cargo_count, 0);
+
+    // ✅ OTOMATIK KARAR MEKANIZMASI
+    let selectedType = 'unlimited';
+    let reason = '';
+
+    if (totalWeight <= 2250) {
+      selectedType = 'fixed-3';
+      reason = `Toplam ağırlık ${totalWeight}kg ≤ 2250kg (3 araç yeterli)`;
+    } else if (totalWeight <= 3000) {
+      selectedType = 'fixed-4';
+      reason = `Toplam ağırlık ${totalWeight}kg > 2250kg (4 araç gerekli)`;
+    } else {
+      selectedType = 'unlimited';
+      reason = `Toplam ağırlık ${totalWeight}kg > 3000kg (Sınırsız araç)`;
+    }
+
+    console.log(`📊 Otomatik analiz: ${reason}`);
+
+    // ✅ ÖNCE autoAnalysis'i set et
+    const autoAnalysisData = {
+      selectedType,
+      reason,
+      totalWeight,
+      totalCount
+    };
+    setAutoAnalysis(autoAnalysisData);
+
+    const response = await axios.post(
+      `${API_URL}/routes/calculate`,
+      { problem_type: selectedType },
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
         }
+      }
+    );
+
+    console.log('✅ Routes calculated:', response.data);
+    setRoutes(response.data.routes);
+    setStats({
+      totalCost: parseFloat(response.data.totalCost),
+      vehiclesUsed: response.data.vehiclesUsed,
+      totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
+      totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
+    });
+
+    // ✅ autoAnalysis'i vehicles bilgisiyle güncelle
+    setAutoAnalysis(prev => ({
+      ...prev,
+      vehiclesUsed: response.data.vehiclesUsed,
+      acceptance: response.data.acceptanceRate
+    }));
+
+    if (response.data.suggestedRejectedCargo && response.data.suggestedRejectedCargo.length > 0) {
+      setRejectedCargo(response.data.suggestedRejectedCargo);
+      setMessage(
+        `📊 ${reason}\n` +
+        `⚠️ ${response.data.suggestedRejectedCargo.length} istasyon red EDİLEBİLİR (admin onayı gerekli)! ` +
+        `Mevcut kabul: ${response.data.acceptanceRate}%`
       );
-
-      console.log('✅ Routes calculated:', response.data);
-      setRoutes(response.data.routes);
-      setStats({
-        totalCost: parseFloat(response.data.totalCost),
-        vehiclesUsed: response.data.vehiclesUsed,
-        totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
-        totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
-      });
-
-         if (response.data.rejectedCargo && response.data.rejectedCargo.length > 0) {
-      setRejectedCargo(response.data.rejectedCargo);
-      setMessage(`⚠️ ${response.data.rejectedCargo.length} istasyon reddedildi!`);
     } else {
       setRejectedCargo([]);
-      setMessage('✅ Tüm kargolar kabul edildi!');
+      setMessage(`📊 ${reason}\n✅ Tüm kargolar başarıyla atandı!`);
     }
 
-      loadAllRoutes();
+    loadAllRoutes();
 
-    } catch (error) {
-      console.error('Error calculating routes:', error);
-      alert('Rota hesaplanırken hata oluştu: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (error) {
+    console.error('Error calculating routes:', error);
+    alert('Rota hesaplanırken hata oluştu: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="admin-container">
@@ -470,15 +517,6 @@ const rejectCargo = async (cargoId) => {
         <div className="header">
           <h1>Kargo İşletme Sistemi - Admin Paneli</h1>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <select 
-              value={problemType}
-              onChange={(e) => setProblemType(e.target.value)}
-              style={{ padding: '8px 12px', fontSize: '14px', borderRadius: '4px' }}
-            >
-              <option value="unlimited">🔓 Sınırsız Araç</option>
-              <option value="fixed">🔒 3 Araç Sınırı</option>
-            </select>
-            
             <button 
               className="btn btn-success" 
               onClick={calculateRoutes}
@@ -562,35 +600,15 @@ const rejectCargo = async (cargoId) => {
             )}
 
               {rejectedCargo.length > 0 && (
-      <div style={{ backgroundColor: '#fff3cd', borderLeft: '4px solid #ff9800', padding: '20px', marginBottom: '20px' }}>
-        <h3>⚠️ Reddedilen Kargolar ({rejectedCargo.length})</h3>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>İstasyon ID</th>
-              <th>İstasyon Adı</th>
-              <th>Ağırlık (kg)</th>
-              <th>Kargo Sayısı</th>
-              <th>Red Sebebi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rejectedCargo.map((cargo, idx) => {
-              const station = stations.find(s => s.id === cargo.stationId);
-              return (
-                <tr key={idx}>
-                  <td>{cargo.stationId}</td>
-                  <td>{station?.name || 'Bilinmiyor'}</td>
-                  <td>{cargo.weight} kg</td>
-                  <td>{cargo.count}</td>
-                  <td>{cargo.reason}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    )}
+     <div style={{ 
+    backgroundColor: '#fff3cd', 
+    borderLeft: '4px solid #ff9800', 
+    padding: '12px 15px', 
+    marginBottom: '20px',
+    borderRadius: '4px'
+  }}>
+  </div>
+)}
 
             <h3>Tüm Rotalar</h3>
             <table className="table">
