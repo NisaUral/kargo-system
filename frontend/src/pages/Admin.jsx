@@ -8,6 +8,10 @@ import L from 'leaflet';
 const API_URL = 'http://localhost:5000/api';
 const ADMIN_TOKEN = localStorage.getItem('adminToken');
 
+// src/pages/Admin.jsx başında (import'lardan sonra)
+
+// Leaflet Routing ekle (CDN'den)
+
 
 // FitBounds Component
 function FitBoundsComponent({ stations, routePolylines }) {
@@ -17,17 +21,32 @@ function FitBoundsComponent({ stations, routePolylines }) {
     if (map) {
       if (routePolylines && routePolylines.length > 0) {
         let bounds = null;
+        
+        // ✅ stationIds'den koordinatlara çevir
         routePolylines.forEach(poly => {
-          if (poly.positions && poly.positions.length > 0) {
-            poly.positions.forEach(coord => {
-              if (bounds === null) {
-                bounds = L.latLngBounds(coord, coord);
+          if (poly.stationIds && poly.stationIds.length > 0) {
+            poly.stationIds.forEach(stationId => {
+              let coord;
+              if (stationId === 0) {
+                coord = [40.8667, 29.85];
               } else {
-                bounds.extend(coord);
+                const station = stations.find(s => s.id === stationId);
+                if (station) {
+                  coord = [parseFloat(station.latitude), parseFloat(station.longitude)];
+                }
+              }
+              
+              if (coord) {
+                if (bounds === null) {
+                  bounds = L.latLngBounds(coord, coord);
+                } else {
+                  bounds.extend(coord);
+                }
               }
             });
           }
         });
+        
         if (bounds) {
           map.fitBounds(bounds, { padding: [50, 50] });
         }
@@ -44,42 +63,103 @@ function FitBoundsComponent({ stations, routePolylines }) {
   return null;
 }
 
-// Route Lines Component
-function RouteLines({ routePolylines }) {
+// Route Lines Component - GERÇEKİ ROTA ÇİZİMİ
+// Route Lines Component - GERÇEKİ ROTA ÇİZİMİ (OSRM ile)
+function RouteLines({ routePolylines, stations }) {
   const map = useMap();
   
   useEffect(() => {
     if (routePolylines && routePolylines.length > 0 && map) {
-      console.log(`🎨 RouteLines: ${routePolylines.length} polyline eklenecek`);
+      console.log(`🎨 Gerçek rotalar çiziliyor: ${routePolylines.length} rota`);
       
+      // Eski çizgileri sil
       map.eachLayer(layer => {
         if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
           map.removeLayer(layer);
         }
       });
       
-      routePolylines.forEach((poly, idx) => {
-        console.log(`📍 Polyline ${idx} ekleniyor:`, poly);
-        if (poly.positions && poly.positions.length > 0) {
-          try {
-            const line = L.polyline(poly.positions, {
-              color: poly.color,
-              weight: poly.weight,
-              opacity: poly.opacity,
-              dashArray: poly.dashArray
-            }).addTo(map);
-            console.log(`✅ Polyline ${idx} eklendi`);
-          } catch (e) {
-            console.error(`❌ Error adding polyline ${idx}:`, e);
+      routePolylines.forEach((route, idx) => {
+        if (route.stationIds && route.stationIds.length >= 2) {
+          console.log(`📍 Rota ${idx} için gerçek yol isteniyor:`, route.stationIds);
+          
+          // İstasyonları koordinatlara çevir
+          const coordinates = route.stationIds
+            .map(stationId => {
+              if (stationId === 0) {
+                return { lat: 40.8667, lng: 29.85, name: 'Üniversite' };
+              }
+              const station = stations.find(s => s.id === stationId);
+              return station 
+                ? { lat: parseFloat(station.latitude), lng: parseFloat(station.longitude), name: station.name }
+                : null;
+            })
+            .filter(c => c !== null);
+
+          if (coordinates.length >= 2) {
+            // ✅ OSRM'den gerçek rota iste
+            fetchRealRoute(coordinates, route.color, idx, map);
           }
         }
       });
     }
-  }, [routePolylines, map]);
+  }, [routePolylines, map, stations]);
   
   return null;
 }
 
+// Gerçek rota isteme fonksiyonu
+async function fetchRealRoute(coordinates, color, routeIdx, map) {
+  try {
+    // OSRM API format: lon,lat;lon,lat;...
+    const coords = coordinates.map(c => `${c.lng},${c.lat}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson`;
+
+    console.log(`📡 OSRM'den rota isteniyor: ${url}`);
+    
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const geometry = route.geometry;
+
+      // GeoJSON koordinatlarını Leaflet formatına çevir
+      const latLngs = geometry.coordinates.map(coord => [coord[1], coord[0]]);
+
+      // Haritaya çiz
+      L.polyline(latLngs, {
+        color: color || '#3388ff',
+        weight: 5,
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+
+      console.log(`✅ Rota ${routeIdx} gerçek yollarla çizildi (${(route.distance / 1000).toFixed(2)} km)`);
+    } else {
+      console.warn(`⚠️ Rota ${routeIdx} bulunamadı, fallback çizgi kullanıyorum`);
+      // Fallback: Düz çizgi
+      const fallbackCoords = coordinates.map(c => [c.lat, c.lng]);
+      L.polyline(fallbackCoords, {
+        color: color || '#3388ff',
+        weight: 5,
+        opacity: 0.5,
+        dashArray: '5, 5'
+      }).addTo(map);
+    }
+  } catch (error) {
+    console.error(`❌ Rota ${routeIdx} hatası:`, error);
+    // Fallback: Düz çizgi
+    const fallbackCoords = coordinates.map(c => [c.lat, c.lng]);
+    L.polyline(fallbackCoords, {
+      color: color || '#3388ff',
+      weight: 5,
+      opacity: 0.5,
+      dashArray: '5, 5'
+    }).addTo(map);
+  }
+}
 function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stations, setStations] = useState([]);
@@ -136,6 +216,10 @@ function Admin() {
       setMessage('❌ ' + (error.response?.data?.error || 'İstasyon eklenemedi!'));
     }
   };
+useEffect(() => {
+  // Leaflet Routing Machine'e gerek yok!
+  console.log('✅ Harita hazır!');
+}, []);
 
   const loadScenarioAnalysis = async () => {
     try {
@@ -270,49 +354,34 @@ function Admin() {
   };
 
   const drawAllRoutesWithData = (routesToDraw) => {
-    console.log('🎨 drawAllRoutesWithData içinde, routes:', routesToDraw);
-    
-    if (!routesToDraw || routesToDraw.length === 0) {
-      console.log('⚠️ Routes boş!');
-      return;
+  console.log('🎨 drawAllRoutesWithData içinde, routes:', routesToDraw);
+  
+  if (!routesToDraw || routesToDraw.length === 0) {
+    console.log('⚠️ Routes boş!');
+    return;
+  }
+
+  const newPolylines = [];
+  const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
+
+  routesToDraw.forEach((route, routeIndex) => {
+    console.log(`📍 Route ${routeIndex}:`, route);
+
+    let stationsArray = route.stations;
+    if (typeof route.stations === 'string') {
+      stationsArray = route.stations.split(',').map(s => parseInt(s));
     }
 
-    const newPolylines = [];
-
-    routesToDraw.forEach((route, routeIndex) => {
-      console.log(`📍 Route ${routeIndex}:`, route);
-
-      let stationsArray = route.stations;
-      if (typeof route.stations === 'string') {
-        stationsArray = route.stations.split(',').map(s => parseInt(s));
-      }
-      
-      const coordinates = stationsArray
-        .map(stationId => {
-          if (stationId === 0 || stationId === 13) {
-            return [40.8667, 29.85];
-          }
-          const station = stations.find(s => s.id === stationId);
-          return station ? [parseFloat(station.latitude), parseFloat(station.longitude)] : null;
-        })
-        .filter(coord => coord !== null);
-
-      if (coordinates.length > 0) {
-        const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
-        const color = colors[routeIndex % colors.length];
-
-        newPolylines.push({
-          positions: coordinates,
-          color: color,
-          weight: 4,
-          opacity: 0.8,
-          dashArray: '5, 5'
-        });
-      }
+    newPolylines.push({
+      stationIds: stationsArray,  // ✅ İstasyon ID'lerini gönder
+      color: colors[routeIndex % colors.length],
+      weight: 4,
+      opacity: 0.8
     });
+  });
 
-    setAllRoutePolylines(newPolylines);
-  };
+  setAllRoutePolylines(newPolylines);
+};
   const loadPendingCargos = async () => {
   try {
     const response = await axios.get(
@@ -577,39 +646,41 @@ const rejectCargo = async (cargoId) => {
                 border: '1px solid #ddd'
               }}>
                 <MapContainer
-                  style={{ width: '100%', height: '100%' }}
-                  className="leaflet-map"
-                >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='© OpenStreetMap contributors'
-                  />
-                  <FitBoundsComponent stations={stations} routePolylines={allRoutePolylines} />
-                  <RouteLines routePolylines={allRoutePolylines} />
-                  
-                  {stations.map(station => (
-                    <Marker
-                      key={station.id}
-                      position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
-                      icon={L.icon({
-                        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-                        iconSize: [25, 41],
-                        iconAnchor: [12, 41],
-                        popupAnchor: [1, -34],
-                        shadowSize: [41, 41]
-                      })}
-                    >
-                      <Popup>
-                        <strong>{station.name}</strong>
-                        <br />
-                        Lat: {parseFloat(station.latitude).toFixed(4)}
-                        <br />
-                        Lon: {parseFloat(station.longitude).toFixed(4)}
-                      </Popup>
-                    </Marker>
-                  ))}
-                </MapContainer>
+  style={{ width: '100%', height: '100%' }}
+  center={[40.8667, 29.85]}
+  zoom={11}
+  className="leaflet-map"
+>
+  <TileLayer
+    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    attribution='© OpenStreetMap contributors'
+  />
+  <FitBoundsComponent stations={stations} routePolylines={allRoutePolylines} />
+  <RouteLines routePolylines={allRoutePolylines} stations={stations} />
+  
+  {stations.map(station => (
+    <Marker
+      key={station.id}
+      position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
+      icon={L.icon({
+        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+      })}
+    >
+      <Popup>
+        <strong>{station.name}</strong>
+        <br />
+        Lat: {parseFloat(station.latitude).toFixed(4)}
+        <br />
+        Lon: {parseFloat(station.longitude).toFixed(4)}
+      </Popup>
+    </Marker>
+  ))}
+</MapContainer>
               </div>
             )}
 
