@@ -7,17 +7,17 @@ const calculateRoutes = async (req, res) => {
   try {
     const { problem_type } = req.body;
 
-    // Tüm istasyonları getir
     const [stations] = await db.query(
       'SELECT id, name, latitude, longitude FROM stations ORDER BY id'
     );
 
-    // Tüm araçları getir
     const [vehicles] = await db.query(
       'SELECT id, name, capacity_kg, fuel_consumption, rental_cost FROM vehicles WHERE status = "active"'
     );
 
-    // Bekleyen kargo isteklerini getir (sadece pending)
+    const [params] = await db.query('SELECT * FROM parameters WHERE id = 1');
+    const minCargoWeight = params[0]?.min_cargo_weight || 5;
+
     const [cargos] = await db.query(
       `SELECT cr.station_id, SUM(cr.cargo_count) as cargo_count, SUM(cr.cargo_weight_kg) as cargo_weight_kg
        FROM cargo_requests cr
@@ -25,26 +25,48 @@ const calculateRoutes = async (req, res) => {
        GROUP BY cr.station_id`
     );
 
-    // Kargo verisini düzenle
+    const tooLightCargos = [];
     const cargoByStation = {};
+    
     cargos.forEach(cargo => {
-      cargoByStation[cargo.station_id] = {
-        totalCount: cargo.cargo_count,
-        totalWeight: cargo.cargo_weight_kg,
-        station: stations.find(s => s.id === cargo.station_id)
-      };
+      if (cargo.cargo_weight_kg < minCargoWeight) {
+        tooLightCargos.push({
+          station_id: cargo.station_id,
+          weight: cargo.cargo_weight_kg,
+          count: cargo.cargo_count,
+          reason: `Minimum ${minCargoWeight}kg altında (${cargo.cargo_weight_kg}kg)`
+        });
+        
+        console.log(`⚠️ Station ${cargo.station_id}: ${cargo.cargo_weight_kg}kg < ${minCargoWeight}kg (RED!)`);
+      } else {
+        cargoByStation[cargo.station_id] = {
+          totalCount: cargo.cargo_count,
+          totalWeight: cargo.cargo_weight_kg,
+          station: stations.find(s => s.id === cargo.station_id)
+        };
+      }
     });
-   
+
+    for (const lightCargo of tooLightCargos) {
+      await db.query(
+        `UPDATE cargo_requests 
+         SET status = 'rejected', rejection_reason = ?
+         WHERE station_id = ? AND status = 'pending'`,
+        [lightCargo.reason, lightCargo.station_id]
+      );
+    }
+
     if (Object.keys(cargoByStation).length === 0) {
       return res.json({
-        message: 'Yönlendirilecek kargo yok',
+        success: true,
+        message: 'Yönlendirilecek uygun ağırlıkta kargo yok',
         routes: [],
-        totalCost: 0
+        totalCost: 0,
+        rejectedCargoByWeight: tooLightCargos,
+        minCargoWeight: minCargoWeight
       });
     }
 
-    // Parametreleri database'den getir
-    const [params] = await db.query('SELECT * FROM parameters WHERE id = 1');
     const costs = {
       fuel_price_per_liter: params[0]?.fuel_price_per_liter || 1,
       km_cost: params[0]?.km_cost || 1,
@@ -63,20 +85,23 @@ const calculateRoutes = async (req, res) => {
       const selectedVehicles = vehicles.slice(0, vehicleCount);
       
       const vrp = new FixedVehicleVRP(selectedVehicles, stations, cargoByStation, costs);
-  result = vrp.solve();
+      result = vrp.solve();
       
       console.log(`[FIXED] ${vehicleCount} araç ile optimize edildi`);
     }
 
-    // ✅ RED KARGO İÇİN YALNIZCA KAYIT YAP, OTOMATİK RED YAPMA
-    // Admin tarafından manuel olarak red edilecek
-    console.log(`[ROUTES] Reddedilecek kargolar: ${result.rejectedCargo?.length || 0}`);
-    console.log(`[ROUTES] Kabul edilen rotalar: ${result.routes.length}`);
+    if (result.rejectedCargo && result.rejectedCargo.length > 0) {
+      for (const rejectedItem of result.rejectedCargo) {
+        await db.query(
+          `UPDATE cargo_requests 
+           SET status = 'rejected', rejection_reason = ?
+           WHERE station_id = ? AND status = 'pending'`,
+          [rejectedItem.reason, rejectedItem.stationId]
+        );
+      }
+    }
 
-    // Rotaları database'e kaydet
     for (const route of result.routes) {
-      console.log(`📍 Inserting route - vehicleId: ${route.vehicleId}, stations: ${route.stations.join(',')}, weight: ${route.totalWeight}`);
-      
       const stationsWithUniversity = route.stations.includes(0) 
         ? route.stations 
         : [...route.stations, 0];
@@ -95,7 +120,6 @@ const calculateRoutes = async (req, res) => {
         ]
       );
 
-      console.log(`✅ Route inserted with ID: ${routeResult.insertId}, vehicle_id: ${route.vehicleId}`);
       const routeId = routeResult.insertId;
    
       for (const stationId of route.stations) {
@@ -130,10 +154,12 @@ const calculateRoutes = async (req, res) => {
       totalCost: result.totalCost,
       vehiclesUsed: result.vehiclesUsed,
       newVehiclesRented: result.newVehiclesRented,
-      suggestedRejectedCargo: result.rejectedCargo || [], // ✅ TAVSIYE OLARAK GÖR, OTOMATİK RED YAPMA
+      suggestedRejectedCargo: result.rejectedCargo || [],
+      rejectedCargoByWeight: tooLightCargos,
       acceptedWeight: result.acceptedWeight,
       rejectedWeight: result.rejectedWeight,
       acceptanceRate: result.acceptanceRate || 100,
+      minCargoWeight: minCargoWeight,
       summary: result.summary
     });
 

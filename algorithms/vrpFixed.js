@@ -134,94 +134,135 @@ class FixedVehicleVRP {
     };
   }
 
-  solve() {
-    this.rejectedCargo = []; // Reset
-    const availableStations = Object.keys(this.cargoByStation)
-      .map(id => parseInt(id));
 
-    let allRoutes = [];
-    let totalCost = 0;
-    let acceptedWeight = 0;
-    let rejectedWeight = 0;
+selectOptimalStartingStation(availableStations) {
+  console.log('[START-OPT-FIXED] Optimal başlangıç noktası aranıyor...');
+  
+  let bestStation = availableStations[0];
+  let bestScore = Infinity;
 
-    console.log(`[FIXED] Toplam kargo: ${availableStations.length}, 3 araçla işlem yapılacak`);
-
-    // Her araç için rota oluştur
-    for (let vehicleIdx = 0; vehicleIdx < this.vehicles.length; vehicleIdx++) {
-      const currentVehicle = this.vehicles[vehicleIdx];
-      const stationsForRoute = [...availableStations];
-
-      console.log(`\n[FIXED] 🚗 Araç ${vehicleIdx + 1}: Cap=${currentVehicle.capacity_kg}kg`);
-
-      const route = this.nearestNeighborRoute(
-        stationsForRoute[0],
-        stationsForRoute,
-        currentVehicle
-      );
-
-      const usedStations = route.stations.filter(s => s !== 0);
-
-      // Kullanılan istasyonları çıkar
-      usedStations.forEach(stationId => {
-        const idx = availableStations.indexOf(stationId);
-        if (idx > -1) {
-          availableStations.splice(idx, 1);
-        }
-      });
-
-      const fuelCost = route.totalDistance * this.costs.fuel_price_per_liter;
-      const distanceCost = route.totalDistance * this.costs.km_cost;
-      const totalRouteCost = fuelCost + distanceCost;
-
-      allRoutes.push({
-        vehicleId: currentVehicle.id,
-        vehicleName: currentVehicle.name,
-        isRented: false,
-        stations: route.stations,
-        totalDistance: route.totalDistance.toFixed(2),
-        totalWeight: route.totalWeight,
-        capacity: route.capacity,
-        utilization: route.utilization,
-        fuelCost: fuelCost.toFixed(2),
-        distanceCost: distanceCost.toFixed(2),
-        rentalCost: 0,
-        totalCost: totalRouteCost.toFixed(2)
-      });
-
-      totalCost += totalRouteCost;
-      acceptedWeight += route.totalWeight;
+  availableStations.forEach(stationId => {
+    const station = this.stations.find(s => s.id === stationId);
+    
+    const distToUni = this.getDistanceFromUniversity(station);
+    const cargoWeight = this.cargoByStation[stationId]?.totalWeight || 0;
+    
+    let avgDistToOthers = 0;
+    const otherStations = availableStations.filter(s => s !== stationId);
+    otherStations.forEach(otherId => {
+      const otherStation = this.stations.find(s => s.id === otherId);
+      if (otherStation) {
+        const idx1 = this.stations.findIndex(s => s.id === stationId);
+        const idx2 = this.stations.findIndex(s => s.id === otherId);
+        avgDistToOthers += this.distanceMatrix[idx1][idx2];
+      }
+    });
+    if (otherStations.length > 0) {
+      avgDistToOthers /= otherStations.length;
     }
 
-    // Kalan istasyonları reject et
-    availableStations.forEach(stationId => {
-      this.rejectedCargo.push({
-        stationId,
-        weight: this.cargoByStation[stationId]?.totalWeight || 0,
-        count: this.cargoByStation[stationId]?.totalCount || 0,
-        reason: 'Tüm araçlar dolu'
-      });
-      rejectedWeight += this.cargoByStation[stationId]?.totalWeight || 0;
+    const score = (distToUni * 0.3) + (avgDistToOthers * 0.4) - (cargoWeight * 0.3);
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestStation = stationId;
+    }
+  });
+
+  console.log(`[START-OPT-FIXED] ✅ Seçilen başlangıç: Station ${bestStation}`);
+  return bestStation;
+}
+
+  solve() {
+  this.rejectedCargo = [];
+  const availableStations = Object.keys(this.cargoByStation)
+    .map(id => parseInt(id));
+
+  let allRoutes = [];
+  let totalCost = 0;
+  let acceptedWeight = 0;
+  let rejectedWeight = 0;
+
+  console.log(`[FIXED] Toplam kargo: ${availableStations.length}, ${this.vehicles.length} araçla işlem yapılacak`);
+
+  // Her araç için rota oluştur
+  for (let vehicleIdx = 0; vehicleIdx < this.vehicles.length; vehicleIdx++) {
+    const currentVehicle = this.vehicles[vehicleIdx];
+    const stationsForRoute = [...availableStations];
+
+    console.log(`\n[FIXED] 🚗 Araç ${vehicleIdx + 1}: Cap=${currentVehicle.capacity_kg}kg`);
+
+    // ✅ OPTIMAL BAŞLANGIÇ NOKTASINI SEÇ
+    const startingStation = this.selectOptimalStartingStation(stationsForRoute);
+    
+    const route = this.nearestNeighborRoute(
+      startingStation,  // ✅ Optimal başlangıç
+      stationsForRoute,
+      currentVehicle
+    );
+
+    const usedStations = route.stations.filter(s => s !== 0);
+
+    usedStations.forEach(stationId => {
+      const idx = availableStations.indexOf(stationId);
+      if (idx > -1) {
+        availableStations.splice(idx, 1);
+      }
     });
 
-    console.log(`\n[FIXED] ✅ Kabul edilen: ${acceptedWeight}kg`);
-    console.log(`[FIXED] ❌ Reddedilen: ${rejectedWeight}kg (${this.rejectedCargo.length} istasyon)`);
+    const fuelCost = route.totalDistance * this.costs.fuel_price_per_liter;
+    const distanceCost = route.totalDistance * this.costs.km_cost;
+    const totalRouteCost = fuelCost + distanceCost;
 
-    return {
-      routes: allRoutes,
-      totalCost: totalCost.toFixed(2),
-      vehiclesUsed: allRoutes.length,
-      newVehiclesRented: 0,
-      rejectedCargo: this.rejectedCargo, // ✅ RED KARGO DETAYI
-      acceptedWeight,
-      rejectedWeight,
-      acceptanceRate: ((acceptedWeight / (acceptedWeight + rejectedWeight)) * 100).toFixed(1),
-      summary: {
-        totalDistance: allRoutes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0).toFixed(2),
-        totalWeight: allRoutes.reduce((sum, r) => sum + r.totalWeight, 0),
-        averageCostPerVehicle: allRoutes.length > 0 ? (totalCost / allRoutes.length).toFixed(2) : 0
-      }
-    };
+    allRoutes.push({
+      vehicleId: currentVehicle.id,
+      vehicleName: currentVehicle.name,
+      isRented: false,
+      stations: route.stations,
+      totalDistance: route.totalDistance.toFixed(2),
+      totalWeight: route.totalWeight,
+      capacity: route.capacity,
+      utilization: route.utilization,
+      fuelCost: fuelCost.toFixed(2),
+      distanceCost: distanceCost.toFixed(2),
+      rentalCost: 0,
+      totalCost: totalRouteCost.toFixed(2)
+    });
+
+    totalCost += totalRouteCost;
+    acceptedWeight += route.totalWeight;
   }
+
+  // Kalan istasyonları reject et
+  availableStations.forEach(stationId => {
+    this.rejectedCargo.push({
+      stationId,
+      weight: this.cargoByStation[stationId]?.totalWeight || 0,
+      count: this.cargoByStation[stationId]?.totalCount || 0,
+      reason: 'Tüm araçlar dolu'
+    });
+    rejectedWeight += this.cargoByStation[stationId]?.totalWeight || 0;
+  });
+
+  console.log(`\n[FIXED] ✅ Kabul edilen: ${acceptedWeight}kg`);
+  console.log(`[FIXED] ❌ Reddedilen: ${rejectedWeight}kg (${this.rejectedCargo.length} istasyon)`);
+
+  return {
+    routes: allRoutes,
+    totalCost: totalCost.toFixed(2),
+    vehiclesUsed: allRoutes.length,
+    newVehiclesRented: 0,
+    rejectedCargo: this.rejectedCargo,
+    acceptedWeight,
+    rejectedWeight,
+    acceptanceRate: ((acceptedWeight / (acceptedWeight + rejectedWeight)) * 100).toFixed(1),
+    summary: {
+      totalDistance: allRoutes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0).toFixed(2),
+      totalWeight: allRoutes.reduce((sum, r) => sum + r.totalWeight, 0),
+      averageCostPerVehicle: allRoutes.length > 0 ? (totalCost / allRoutes.length).toFixed(2) : 0
+    }
+  };
+}
 }
 
 module.exports = FixedVehicleVRP;

@@ -450,6 +450,18 @@ const rejectCargo = async (cargoId) => {
       setMessage(`📊 ${reason}\n✅ Tüm kargolar başarıyla atandı!`);
     }
 
+    if (response.data.rejectedCargoByWeight && response.data.rejectedCargoByWeight.length > 0) {
+  const lightCargoMsg = `🔔 ${response.data.rejectedCargoByWeight.length} istasyon minimum ${response.data.minCargoWeight}kg altında (toplam: ${response.data.rejectedCargoByWeight.reduce((s, c) => s + c.weight, 0)}kg)`;
+  
+  setMessage(
+    `📊 ${autoAnalysis.reason}\n` +
+    lightCargoMsg + `\n` +
+    (response.data.suggestedRejectedCargo?.length > 0 
+      ? `⚠️ ${response.data.suggestedRejectedCargo.length} istasyon kapasite yetersizliği` 
+      : `✅ Tüm uygun kargolar atandı!`)
+  );
+}
+
     loadAllRoutes();
 
   } catch (error) {
@@ -460,10 +472,12 @@ const rejectCargo = async (cargoId) => {
   }
 };
 
+
+
   return (
     <div className="admin-container">
       <div className="sidebar">
-        <h2>📊 Admin</h2>
+        <h2> Admin</h2>
         <nav>
           <button
             className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -482,13 +496,13 @@ const rejectCargo = async (cargoId) => {
             className={`nav-btn ${activeTab === 'station-add' ? 'active' : ''}`}
             onClick={() => setActiveTab('station-add')}
           >
-            ➕ İstasyon Ekle
+             İstasyon Ekle
           </button>
           <button
             className={`nav-btn ${activeTab === 'vehicle-rent' ? 'active' : ''}`}
             onClick={() => setActiveTab('vehicle-rent')}
           >
-            🚗 Araç Kirala
+             Araç Kirala
           </button>
           
           <button
@@ -507,9 +521,9 @@ const rejectCargo = async (cargoId) => {
           className={`nav-btn ${activeTab === 'cargo-management' ? 'active' : ''}`}
           onClick={() => setActiveTab('cargo-management')}
          >
-          📦 Kargo Yönetimi
+           Kargo Yönetimi
           </button>
-          <a href="/" className="nav-btn">🚪 Çıkış</a>
+          <a href="/" className="nav-btn"> Çıkış</a>
         </nav>
       </div>
 
@@ -522,14 +536,14 @@ const rejectCargo = async (cargoId) => {
               onClick={calculateRoutes}
               disabled={loading}
             >
-              {loading ? '⏳ Hesaplanıyor...' : '🚀 Rota Planla'}
+              {loading ? '⏳ Hesaplanıyor...' : ' Rota Planla'}
             </button>
             
             <button 
               className="btn btn-info"
               onClick={loadScenarioAnalysis}
             >
-              📊 Senaryo Analizi
+               Senaryo Analizi
             </button>
           </div>
         </div>
@@ -644,7 +658,7 @@ const rejectCargo = async (cargoId) => {
 
             {scenarioAnalysis && (
               <div style={{ marginTop: '30px', backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px' }}>
-                <h3>📊 Senaryo Analizi</h3>
+                <h3> Senaryo Analizi</h3>
                 <table className="table">
                   <tbody>
                     <tr>
@@ -674,7 +688,7 @@ const rejectCargo = async (cargoId) => {
                   </tbody>
                 </table>
 
-                <h4 style={{ marginTop: '20px' }}>🚗 Araç Detayları</h4>
+                <h4 style={{ marginTop: '20px' }}> Araç Detayları</h4>
                 <table className="table">
                   <thead>
                     <tr>
@@ -700,13 +714,7 @@ const rejectCargo = async (cargoId) => {
                   </tbody>
                 </table>
 
-                <button 
-                  className="btn btn-primary"
-                  onClick={() => window.print()}
-                  style={{ marginTop: '20px' }}
-                >
-                  🖨️ Analizi Yazdır
-                </button>
+                
               </div>
             )}
           </section>
@@ -714,7 +722,7 @@ const rejectCargo = async (cargoId) => {
 
         {activeTab === 'rotalar' && (
           <section className="section">
-            <h2>🛣️ Detaylı Rota Bilgileri</h2>
+            <h2> Detaylı Rota Bilgileri</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -758,7 +766,7 @@ const rejectCargo = async (cargoId) => {
 
         {activeTab === 'istasyonlar' && (
           <section className="section">
-            <h2>🏢 İstasyonlar</h2>
+            <h2> İstasyonlar</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -781,7 +789,7 @@ const rejectCargo = async (cargoId) => {
                         className="btn btn-danger"
                         onClick={() => deleteStation(station.id)}
                       >
-                        🗑️ Sil
+                         Sil
                       </button>
                     </td>
                   </tr>
@@ -793,7 +801,7 @@ const rejectCargo = async (cargoId) => {
 
         {activeTab === 'araclar' && (
           <section className="section">
-            <h2>🚗 Araçlar</h2>
+            <h2> Araçlar</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -816,7 +824,7 @@ const rejectCargo = async (cargoId) => {
                         className="btn btn-danger"
                         onClick={() => deleteVehicle(vehicle.id)}
                       >
-                        🗑️ Sil
+                         Sil
                       </button>
                     </td>
                   </tr>
@@ -825,10 +833,47 @@ const rejectCargo = async (cargoId) => {
             </table>
           </section>
         )}
+        {activeTab === 'dashboard' && autoAnalysis && (
+  <section className="section" style={{ backgroundColor: '#e3f2fd', borderLeft: '4px solid #2196f3', padding: '20px', marginBottom: '20px' }}>
+    <h3> Otomatik Problem Type Seçimi</h3>
+    <table style={{ width: '100%' }}>
+      <tbody>
+        <tr>
+          <td><strong>Toplam Kargo Ağırlığı:</strong></td>
+          <td>{autoAnalysis.totalWeight} kg</td>
+        </tr>
+        <tr>
+          <td><strong>Minimum Ağırlık Eşiği:</strong></td>
+          <td>{autoAnalysis.minCargoWeight} kg</td>
+        </tr>
+        <tr>
+          <td><strong>Seçilen Problem Type:</strong></td>
+          <td>
+            <span style={{ 
+              backgroundColor: autoAnalysis.selectedType === 'unlimited' ? '#ff9800' : '#4caf50',
+              color: 'white',
+              padding: '4px 12px',
+              borderRadius: '4px',
+              fontWeight: 'bold'
+            }}>
+              {autoAnalysis.selectedType === 'unlimited' ? ' Sınırsız Araç' : 
+               autoAnalysis.selectedType === 'fixed-3' ? ' 3 Araç' : 
+               autoAnalysis.selectedType === 'fixed-4' ? ' 4 Araç' : autoAnalysis.selectedType}
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Karar Sebebi:</strong></td>
+          <td>{autoAnalysis.reason}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+)}
 
         {activeTab === 'cargo-management' && (
   <section className="section">
-    <h2>📦 Bekleyen Kargolar - Yönetim</h2>
+    <h2> Bekleyen Kargolar - Yönetim</h2>
     
     <div style={{ marginBottom: '20px' }}>
       <button 
@@ -884,7 +929,7 @@ const rejectCargo = async (cargoId) => {
                       className="btn btn-danger"
                       onClick={() => rejectCargo(cargo.id)}
                     >
-                      ❌ Red Et
+                       Red Et
                     </button>
                   )}
                 </td>
@@ -899,7 +944,7 @@ const rejectCargo = async (cargoId) => {
 
         {activeTab === 'station-add' && (
           <section className="section">
-            <h2>➕ Yeni İstasyon Ekle</h2>
+            <h2> Yeni İstasyon Ekle</h2>
             <form onSubmit={addStation} style={{ maxWidth: '500px' }}>
               <div className="form-group">
                 <label>İstasyon Adı:</label>
@@ -937,7 +982,7 @@ const rejectCargo = async (cargoId) => {
               </div>
 
               <button type="submit" className="btn btn-success">
-                ➕ İstasyon Ekle
+                 İstasyon Ekle
               </button>
             </form>
           </section>
@@ -945,13 +990,13 @@ const rejectCargo = async (cargoId) => {
 
         {activeTab === 'vehicle-rent' && (
           <section className="section">
-            <h2>🚗 Araç Kirala</h2>
+            <h2> Araç Kirala</h2>
             
             <div style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
               <h3>Sistem Parametreleri</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="form-group">
-                  <label>💧 Yakıt Fiyatı (₺/L):</label>
+                  <label> Yakıt Fiyatı (₺/L):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -960,7 +1005,7 @@ const rejectCargo = async (cargoId) => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>🛣️ Km Maliyeti (₺/km):</label>
+                  <label> Km Maliyeti (₺/km):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -968,6 +1013,16 @@ const rejectCargo = async (cargoId) => {
                     onChange={(e) => setParameters({...parameters, km_cost: parseFloat(e.target.value)})}
                   />
                 </div>
+                <div className="form-group">
+               <label> Minimum Kargo Ağırlığı (kg):</label>
+               <input
+                  type="number"
+                  step="1"
+                 value={parameters.min_cargo_weight}
+                 onChange={(e) => setParameters({...parameters, min_cargo_weight: parseInt(e.target.value)})}
+                 placeholder="Örn: 5 (5kg altında red et)"
+                />
+               </div>
               </div>
               <button 
                 type="button"
@@ -991,7 +1046,7 @@ const rejectCargo = async (cargoId) => {
                 }}
                 style={{ marginTop: '10px' }}
               >
-                💾 Parametreleri Kaydet
+                 Parametreleri Kaydet
               </button>
             </div>
 
@@ -1029,7 +1084,7 @@ const rejectCargo = async (cargoId) => {
               </div>
 
               <button type="submit" className="btn btn-success">
-                🚗 Araç Kirala
+                 Araç Kirala
               </button>
             </form>
           </section>
@@ -1038,5 +1093,6 @@ const rejectCargo = async (cargoId) => {
     </div>
   );
 }
+
 
 export default Admin;

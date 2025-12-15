@@ -116,7 +116,7 @@ function Login() {
   return (
     <div className="login-container">
       <div className="login-card">
-        <h1>🚚 Kargo İşletme Sistemi</h1>
+        <h1> Kargo İşletme Sistemi</h1>
 
         <div className="tabs">
           <button
@@ -169,25 +169,13 @@ function Login() {
 
             <div className="form-group">
               <label>Giriş Türü:</label>
-              <select
-                name="userType"
-                value={loginData.userType}
-                onChange={handleLoginChange}
-              >
-                <option value="user">Kullanıcı</option>
-                <option value="admin">Admin</option>
-              </select>
+             
             </div>
 
             <button type="submit" className="btn-login" disabled={loading}>
-              {loading ? '⏳ Giriş Yapılıyor...' : '🔓 Giriş Yap'}
+              {loading ? '⏳ Giriş Yapılıyor...' : ' Giriş Yap'}
             </button>
 
-            <div className="demo-credentials">
-              <p><strong>Demo Kimlik Bilgileri:</strong></p>
-              <p>👤 User: user@example.com / user123</p>
-              <p>👨‍💼 Admin: admin@example.com / admin123</p>
-            </div>
           </form>
         )}
 
@@ -258,7 +246,7 @@ function Login() {
             </div>
 
             <button type="submit" className="btn-login" disabled={loading}>
-              {loading ? '⏳ Kayıt Yapılıyor...' : '📝 Kayıt Ol'}
+              {loading ? '⏳ Kayıt Yapılıyor...' : ' Kayıt Ol'}
             </button>
 
             <p style={{ textAlign: 'center', marginTop: '15px', color: '#666', fontSize: '13px' }}>
