@@ -62,36 +62,50 @@ const calculateRoutes = async (req, res) => {
       result = vrp.solve();
     }
 
-    // Rotaları ve kargo atamalarını database'e kaydet
-   // Rotaları ve kargo atamalarını database'e kaydet
-for (const route of result.routes) {
-  console.log(`📍 Inserting route - vehicleId: ${route.vehicleId}, stations: ${route.stations.join(',')}, weight: ${route.totalWeight}`);
-  
-  // ÖNEMLİ: Üniversiteyi de ekle!
-  const stationsWithUniversity = route.stations.includes(0) 
-    ? route.stations 
-    : [...route.stations, 0]; // 0 = University
-  
-  const [routeResult] = await db.query(
-    `INSERT INTO routes (vehicle_id, total_distance_km, total_weight_kg, fuel_cost, distance_cost, total_cost, stations) 
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [
-      route.vehicleId,
-      parseFloat(route.totalDistance),
-      route.totalWeight,
-      parseFloat(route.fuelCost),
-      parseFloat(route.distanceCost),
-      parseFloat(route.totalCost),
-      stationsWithUniversity.join(',')  
-    ]
-  );
+    // ✅ RED KARGO İÇİN VERİTABANI KAYDI (yeni)
+    if (result.rejectedCargo && result.rejectedCargo.length > 0) {
+      for (const rejectedItem of result.rejectedCargo) {
+        // Reddedilen istasyondaki pending kargo'ları rejected'a çevir
+        await db.query(
+          `UPDATE cargo_requests 
+           SET status = 'rejected', rejection_reason = ?
+           WHERE station_id = ? AND status = 'pending'`,
+          [rejectedItem.reason, rejectedItem.stationId]
+        );
+        
+        console.log(`❌ Reddedildi: İstasyon ${rejectedItem.stationId} - ${rejectedItem.reason}`);
+      }
+    }
 
-  console.log(`✅ Route inserted with ID: ${routeResult.insertId}, vehicle_id: ${route.vehicleId}`);
-  const routeId = routeResult.insertId;
- 
+    // Rotaları ve kargo atamalarını database'e kaydet
+    for (const route of result.routes) {
+      console.log(`📍 Inserting route - vehicleId: ${route.vehicleId}, stations: ${route.stations.join(',')}, weight: ${route.totalWeight}`);
+      
+      // ÖNEMLİ: Üniversiteyi de ekle!
+      const stationsWithUniversity = route.stations.includes(0) 
+        ? route.stations 
+        : [...route.stations, 0]; // 0 = University
+      
+      const [routeResult] = await db.query(
+        `INSERT INTO routes (vehicle_id, total_distance_km, total_weight_kg, fuel_cost, distance_cost, total_cost, stations) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          route.vehicleId,
+          parseFloat(route.totalDistance),
+          route.totalWeight,
+          parseFloat(route.fuelCost),
+          parseFloat(route.distanceCost),
+          parseFloat(route.totalCost),
+          stationsWithUniversity.join(',')  
+        ]
+      );
+
+      console.log(`✅ Route inserted with ID: ${routeResult.insertId}, vehicle_id: ${route.vehicleId}`);
+      const routeId = routeResult.insertId;
+   
       // Her istasyondaki kargo'ları shipments'e ekle
       for (const stationId of route.stations) {
-        if (stationId === 13) continue; // Üniversite, atla
+        if (stationId === 0) continue; // Üniversite, atla
         
         const [cargosAtStation] = await db.query(
           `SELECT id FROM cargo_requests 
@@ -116,10 +130,19 @@ for (const route of result.routes) {
       }
     }
 
+    // ✅ RESPONSE'A RED KARGO DETAYI EKLE
     res.json({
       success: true,
       problem_type: problem_type || 'fixed',
-      ...result
+      routes: result.routes,
+      totalCost: result.totalCost,
+      vehiclesUsed: result.vehiclesUsed,
+      newVehiclesRented: result.newVehiclesRented,
+      rejectedCargo: result.rejectedCargo || [], // ✅ EKLE
+      acceptedWeight: result.acceptedWeight,
+      rejectedWeight: result.rejectedWeight,
+      acceptanceRate: result.acceptanceRate || 100,
+      summary: result.summary
     });
 
   } catch (error) {
@@ -478,7 +501,72 @@ const analyzeScenario = async (req, res) => {
   }
 };
 
-module.exports = { calculateRoutes, getAllRoutes, getMyRoutes, addStation, rentVehicle, deleteStation, deleteVehicle, saveParameters ,analyzeScenario};
+// Bekleyen kargolar getir
+const getPendingCargos = async (req, res) => {
+  try {
+    const [user] = await db.query('SELECT role FROM users WHERE id = ?', [req.userId]);
+    
+    if (user[0]?.role !== 'admin') {
+      return res.status(403).json({ error: 'Sadece admin erişebilir!' });
+    }
+
+    const [cargos] = await db.query(`
+      SELECT 
+        cr.id,
+        cr.user_id,
+        u.name as user_name,
+        cr.station_id,
+        cr.cargo_count,
+        cr.cargo_weight_kg,
+        cr.status,
+        cr.created_at
+      FROM cargo_requests cr
+      LEFT JOIN users u ON cr.user_id = u.id
+      WHERE cr.status = 'pending'
+      ORDER BY cr.created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      data: cargos
+    });
+  } catch (error) {
+    console.error('Get pending cargos error:', error);
+    res.status(500).json({ error: 'Kargolar getirilemedi!' });
+  }
+};
+
+// Kargo red et
+const rejectCargo = async (req, res) => {
+  try {
+    const [user] = await db.query('SELECT role FROM users WHERE id = ?', [req.userId]);
+    
+    if (user[0]?.role !== 'admin') {
+      return res.status(403).json({ error: 'Sadece admin erişebilir!' });
+    }
+
+    const { cargoId } = req.params;
+    const { reason } = req.body;
+
+    await db.query(
+      `UPDATE cargo_requests 
+       SET status = 'rejected', rejection_reason = ?
+       WHERE id = ?`,
+      [reason || 'Admin tarafından reddedildi', cargoId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Kargo başarıyla reddedildi!'
+    });
+  } catch (error) {
+    console.error('Reject cargo error:', error);
+    res.status(500).json({ error: 'Kargo reddedilemedi!' });
+  }
+};
+
+module.exports = { calculateRoutes, getAllRoutes, getMyRoutes, addStation, rentVehicle, deleteStation, deleteVehicle, saveParameters, analyzeScenario, getPendingCargos, rejectCargo };
+
 
 
 

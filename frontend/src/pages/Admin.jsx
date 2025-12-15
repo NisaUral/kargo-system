@@ -95,6 +95,8 @@ function Admin() {
   const [message, setMessage] = useState('');
   const [scenarioAnalysis, setScenarioAnalysis] = useState(null);
   const [problemType, setProblemType] = useState('unlimited');
+  const [pendingCargos, setPendingCargos] = useState([]);
+  const [rejectedCargo, setRejectedCargo] = useState([]);
   const [parameters, setParameters] = useState({
     fuel_price_per_liter: 1,
     km_cost: 1,
@@ -310,6 +312,46 @@ function Admin() {
 
     setAllRoutePolylines(newPolylines);
   };
+  const loadPendingCargos = async () => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/routes/pending-cargos`,  // ✅ BURAYI GÜNCELLE
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
+        }
+      }
+    );
+    setPendingCargos(response.data.data);
+    setMessage('✅ Bekleyen kargolar yüklendi!');
+  } catch (error) {
+    setMessage('❌ Kargolar yüklenemedi!');
+    console.error(error);
+  }
+};
+
+const rejectCargo = async (cargoId) => {
+  if (!window.confirm('Bu kargoyı reddetmek istediğinize emin misiniz?')) {
+    return;
+  }
+
+  try {
+    await axios.post(
+      `${API_URL}/routes/cargo-requests/${cargoId}/reject`,  // ✅ BURAYI GÜNCELLE
+      { reason: 'Admin tarafından reddedildi' },
+      {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_TOKEN}`
+        }
+      }
+    );
+    setMessage('✅ Kargo başarıyla reddedildi!');
+    loadPendingCargos();
+    setTimeout(() => setMessage(''), 3000);
+  } catch (error) {
+    setMessage('❌ Kargo reddedilemedi!');
+  }
+};
 
   const loadAllRoutes = async () => {
     try {
@@ -352,6 +394,14 @@ function Admin() {
         totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
         totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
       });
+
+         if (response.data.rejectedCargo && response.data.rejectedCargo.length > 0) {
+      setRejectedCargo(response.data.rejectedCargo);
+      setMessage(`⚠️ ${response.data.rejectedCargo.length} istasyon reddedildi!`);
+    } else {
+      setRejectedCargo([]);
+      setMessage('✅ Tüm kargolar kabul edildi!');
+    }
 
       loadAllRoutes();
 
@@ -406,6 +456,12 @@ function Admin() {
           >
             Araçlar
           </button>
+          <button
+          className={`nav-btn ${activeTab === 'cargo-management' ? 'active' : ''}`}
+          onClick={() => setActiveTab('cargo-management')}
+         >
+          📦 Kargo Yönetimi
+          </button>
           <a href="/" className="nav-btn">🚪 Çıkış</a>
         </nav>
       </div>
@@ -451,6 +507,8 @@ function Admin() {
             {message}
           </div>
         )}
+
+       
 
         {activeTab === 'dashboard' && (
           <section className="section">
@@ -502,6 +560,37 @@ function Admin() {
                 </MapContainer>
               </div>
             )}
+
+              {rejectedCargo.length > 0 && (
+      <div style={{ backgroundColor: '#fff3cd', borderLeft: '4px solid #ff9800', padding: '20px', marginBottom: '20px' }}>
+        <h3>⚠️ Reddedilen Kargolar ({rejectedCargo.length})</h3>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>İstasyon ID</th>
+              <th>İstasyon Adı</th>
+              <th>Ağırlık (kg)</th>
+              <th>Kargo Sayısı</th>
+              <th>Red Sebebi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rejectedCargo.map((cargo, idx) => {
+              const station = stations.find(s => s.id === cargo.stationId);
+              return (
+                <tr key={idx}>
+                  <td>{cargo.stationId}</td>
+                  <td>{station?.name || 'Bilinmiyor'}</td>
+                  <td>{cargo.weight} kg</td>
+                  <td>{cargo.count}</td>
+                  <td>{cargo.reason}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
 
             <h3>Tüm Rotalar</h3>
             <table className="table">
@@ -647,6 +736,8 @@ function Admin() {
           </section>
         )}
 
+        
+
         {activeTab === 'istasyonlar' && (
           <section className="section">
             <h2>🏢 İstasyonlar</h2>
@@ -716,6 +807,77 @@ function Admin() {
             </table>
           </section>
         )}
+
+        {activeTab === 'cargo-management' && (
+  <section className="section">
+    <h2>📦 Bekleyen Kargolar - Yönetim</h2>
+    
+    <div style={{ marginBottom: '20px' }}>
+      <button 
+        className="btn btn-warning"
+        onClick={loadPendingCargos}
+        style={{ marginRight: '10px' }}
+      >
+        🔄 Bekleyen Kargolar Yükle
+      </button>
+    </div>
+
+    <table className="table">
+      <thead>
+        <tr>
+          <th>Kargo ID</th>
+          <th>Kullanıcı</th>
+          <th>İstasyon</th>
+          <th>Ağırlık (kg)</th>
+          <th>Kargo Sayısı</th>
+          <th>Status</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {pendingCargos.length === 0 ? (
+          <tr>
+            <td colSpan="7" style={{ textAlign: 'center' }}>Bekleyen kargo yok</td>
+          </tr>
+        ) : (
+          pendingCargos.map((cargo, idx) => {
+            const station = stations.find(s => s.id === cargo.station_id);
+            return (
+              <tr key={idx}>
+                <td>{cargo.id}</td>
+                <td>{cargo.user_name || 'Bilinmiyor'}</td>
+                <td>{station?.name || `Station ${cargo.station_id}`}</td>
+                <td>{cargo.cargo_weight_kg} kg</td>
+                <td>{cargo.cargo_count}</td>
+                <td>
+                  <span style={{ 
+                    backgroundColor: cargo.status === 'pending' ? '#ffc107' : '#28a745',
+                    color: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px'
+                  }}>
+                    {cargo.status === 'pending' ? '⏳ Beklemede' : '✅ Atandı'}
+                  </span>
+                </td>
+                <td>
+                  {cargo.status === 'pending' && (
+                    <button 
+                      className="btn btn-danger"
+                      onClick={() => rejectCargo(cargo.id)}
+                    >
+                      ❌ Red Et
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })
+        )}
+      </tbody>
+    </table>
+  </section>
+)}
 
         {activeTab === 'station-add' && (
           <section className="section">
