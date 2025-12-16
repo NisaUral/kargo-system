@@ -5,11 +5,9 @@ import Login from './pages/Login';
 import Admin from './pages/Admin';
 import User from './pages/User';
 
-// ✅ INTERCEPTOR - En başta ekle
+// ✅ INTERCEPTOR
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('adminToken') || localStorage.getItem('userToken');
-  console.log('📡 Token gönderiliyor:', token ? 'VAR' : 'YOK');
-  
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -23,8 +21,7 @@ axios.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('userToken');
+      localStorage.clear();
       window.location.href = '/';
     }
     return Promise.reject(error);
@@ -32,26 +29,32 @@ axios.interceptors.response.use(
 );
 
 function App() {
-  const [page, setPage] = React.useState('auth');
-  const userRole = localStorage.getItem('userRole');
-
+  const [page, setPage] = React.useState('login');  // ✅ 'login' olmalı, 'auth' değil
+  
   React.useEffect(() => {
-    if (userRole === 'admin') {
-      setPage('admin');
-    } else if (userRole === 'user') {
-      setPage('user');
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('userToken');
+    const userRole = localStorage.getItem('userRole');
+    
+    console.log('🔍 Token:', token ? 'VAR' : 'YOK');
+    console.log('🔍 Role:', userRole);
+    
+    if (token && userRole) {
+      if (userRole === 'admin') {
+        setPage('admin');
+      } else if (userRole === 'user') {
+        setPage('user');
+      }
     } else {
-      setPage('auth');
+      setPage('login');
     }
-  }, [userRole]);
+  }, []);
 
   return (
     <div className="App">
-      {page === 'auth' && <Login />}
+      {page === 'login' && <Login />}
       {page === 'admin' && <Admin />}
       {page === 'user' && <User />}
     </div>
   );
 }
-
 export default App;

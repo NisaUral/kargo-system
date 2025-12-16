@@ -530,7 +530,17 @@ function Admin() {
           >
             📦 Kargo Yönetimi
           </button>
-          <a href="/" className="nav-btn">🚪 Çıkış</a>
+          <a 
+  href="/" 
+  className="nav-btn"
+  onClick={(e) => {
+    e.preventDefault();
+    localStorage.clear();
+    window.location.href = '/';
+  }}
+>
+  🚪 Çıkış
+</a>
         </nav>
       </div>
 

@@ -307,7 +307,17 @@ function User() {
           </tbody>
         </table>
       </div>
-
+<a 
+  href="/" 
+  className="nav-btn"
+  onClick={(e) => {
+    e.preventDefault();
+    localStorage.clear();
+    window.location.href = '/';
+  }}
+>
+  🚪 Çıkış
+</a>
       {selectedCargo && cargoRoute && (
         <div className="card">
           <h2>📍 Kargo Rotası</h2>
