@@ -171,12 +171,23 @@ const calculateRoutes = async (req, res) => {
 // Tüm rotaları getir (Admin için)
 const getAllRoutes = async (req, res) => {
   try {
+    console.log('📍 getAllRoutes çağrıldı');
+    console.log('req.userId:', req.userId);
+    console.log('req.userRole:', req.userRole);
+    
     const [user] = await db.query('SELECT role FROM users WHERE id = ?', [req.userId]);
     
-    if (user[0]?.role !== 'admin') {
+    console.log('🔍 Database user:', user);
+    console.log('User role:', user[0]?.role);
+    
+    if (!user || !user[0] || user[0].role !== 'admin') {
+      console.log('❌ Admin değil! Role:', user[0]?.role);
       return res.status(403).json({ error: 'Sadece admin erişebilir!' });
     }
 
+    console.log('✅ Admin kontrolü geçildi');
+    
+    // ✅ SQL QUERY DÜZELT
     const [routes] = await db.query(`
       SELECT 
         r.id,
@@ -205,6 +216,8 @@ const getAllRoutes = async (req, res) => {
         : [],
       users: route.users ? route.users.split(',') : []
     }));
+
+    console.log('✅ Routes getirme başarılı:', formattedRoutes.length, 'rota');
 
     res.json({
       success: true,

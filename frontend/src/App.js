@@ -1,21 +1,56 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Home from './pages/Home';
+import axios from 'axios';
+import './App.css';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
 import User from './pages/User';
-import './App.css';
+
+// ✅ INTERCEPTOR - En başta ekle
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('adminToken') || localStorage.getItem('userToken');
+  console.log('📡 Token gönderiliyor:', token ? 'VAR' : 'YOK');
+  
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
+// Error interceptor
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('userToken');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
 
 function App() {
+  const [page, setPage] = React.useState('auth');
+  const userRole = localStorage.getItem('userRole');
+
+  React.useEffect(() => {
+    if (userRole === 'admin') {
+      setPage('admin');
+    } else if (userRole === 'user') {
+      setPage('user');
+    } else {
+      setPage('auth');
+    }
+  }, [userRole]);
+
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/user" element={<User />} />
-      </Routes>
-    </Router>
+    <div className="App">
+      {page === 'auth' && <Login />}
+      {page === 'admin' && <Admin />}
+      {page === 'user' && <User />}
+    </div>
   );
 }
 

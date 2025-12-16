@@ -9,7 +9,7 @@ function Login() {
   const [loginData, setLoginData] = useState({
     email: '',
     password: '',
-    userType: 'user'
+    userType: 'user'  // ✅ EKLE
   });
   const [registerData, setRegisterData] = useState({
     name: '',
@@ -28,14 +28,19 @@ function Login() {
 
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
-        email: loginData.email,
-        password: loginData.password
-      });
+  email: loginData.email,
+  password: loginData.password,
+  role: loginData.userType  // ✅ BU SATIRI EKLE
+});
 
       if (response.data.token) {
-        const tokenKey = loginData.userType === 'admin' ? 'adminToken' : 'userToken';
+        const tokenKey = response.data.user.role === 'admin' ? 'adminToken' : 'userToken';
+        
         localStorage.setItem(tokenKey, response.data.token);
         localStorage.setItem('userRole', response.data.user.role);
+        localStorage.setItem('userId', response.data.user.id);
+        
+        console.log('✅ Giriş başarılı:', response.data.user);
         
         if (response.data.user.role === 'admin') {
           window.location.href = '/admin';
@@ -80,9 +85,13 @@ function Login() {
       });
 
       if (response.data.token) {
-        const tokenKey = registerData.userType === 'admin' ? 'adminToken' : 'userToken';
+        const tokenKey = response.data.user.role === 'admin' ? 'adminToken' : 'userToken';
+        
         localStorage.setItem(tokenKey, response.data.token);
         localStorage.setItem('userRole', response.data.user.role);
+        localStorage.setItem('userId', response.data.user.id);
+        
+        console.log('✅ Kayıt başarılı:', response.data.user);
         
         if (response.data.user.role === 'admin') {
           window.location.href = '/admin';
@@ -116,7 +125,7 @@ function Login() {
   return (
     <div className="login-container">
       <div className="login-card">
-        <h1> Kargo İşletme Sistemi</h1>
+        <h1>📦 Kargo İşletme Sistemi</h1>
 
         <div className="tabs">
           <button
@@ -169,13 +178,19 @@ function Login() {
 
             <div className="form-group">
               <label>Giriş Türü:</label>
-             
+              <select
+                name="userType"
+                value={loginData.userType}
+                onChange={handleLoginChange}
+              >
+                <option value="user">👤 Kullanıcı</option>
+                <option value="admin">🔐 Admin</option>
+              </select>
             </div>
 
             <button type="submit" className="btn-login" disabled={loading}>
-              {loading ? '⏳ Giriş Yapılıyor...' : ' Giriş Yap'}
+              {loading ? '⏳ Giriş Yapılıyor...' : '🔓 Giriş Yap'}
             </button>
-
           </form>
         )}
 
@@ -238,7 +253,7 @@ function Login() {
                 value={registerData.userType}
                 onChange={handleRegisterChange}
               >
-                <option value="user">Kullanıcı</option>
+                <option value="user">👤 Kullanıcı</option>
               </select>
               <small style={{ color: '#666', marginTop: '5px', display: 'block' }}>
                 Admin hesabı için sistem yöneticisine başvurunuz
@@ -246,11 +261,11 @@ function Login() {
             </div>
 
             <button type="submit" className="btn-login" disabled={loading}>
-              {loading ? '⏳ Kayıt Yapılıyor...' : ' Kayıt Ol'}
+              {loading ? '⏳ Kayıt Yapılıyor...' : '✅ Kayıt Ol'}
             </button>
 
             <p style={{ textAlign: 'center', marginTop: '15px', color: '#666', fontSize: '13px' }}>
-              Zaten bir hesabınız var mı? <a href="#" onClick={() => setActiveTab('login')} style={{ color: '#3498db', textDecoration: 'none' }}>Giriş yapın</a>
+              Zaten bir hesabınız var mı? <a href="#" onClick={(e) => { e.preventDefault(); setActiveTab('login'); }} style={{ color: '#3498db', textDecoration: 'none' }}>Giriş yapın</a>
             </p>
           </form>
         )}

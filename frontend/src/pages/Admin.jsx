@@ -6,11 +6,6 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
 const API_URL = 'http://localhost:5000/api';
-const ADMIN_TOKEN = localStorage.getItem('adminToken');
-
-// src/pages/Admin.jsx başında (import'lardan sonra)
-
-// Leaflet Routing ekle (CDN'den)
 
 
 // FitBounds Component
@@ -22,7 +17,6 @@ function FitBoundsComponent({ stations, routePolylines }) {
       if (routePolylines && routePolylines.length > 0) {
         let bounds = null;
         
-        // ✅ stationIds'den koordinatlara çevir
         routePolylines.forEach(poly => {
           if (poly.stationIds && poly.stationIds.length > 0) {
             poly.stationIds.forEach(stationId => {
@@ -63,7 +57,6 @@ function FitBoundsComponent({ stations, routePolylines }) {
   return null;
 }
 
-// Route Lines Component - GERÇEKİ ROTA ÇİZİMİ
 // Route Lines Component - GERÇEKİ ROTA ÇİZİMİ (OSRM ile)
 function RouteLines({ routePolylines, stations }) {
   const map = useMap();
@@ -97,7 +90,6 @@ function RouteLines({ routePolylines, stations }) {
             .filter(c => c !== null);
 
           if (coordinates.length >= 2) {
-            // ✅ OSRM'den gerçek rota iste
             fetchRealRoute(coordinates, route.color, idx, map);
           }
         }
@@ -111,7 +103,6 @@ function RouteLines({ routePolylines, stations }) {
 // Gerçek rota isteme fonksiyonu
 async function fetchRealRoute(coordinates, color, routeIdx, map) {
   try {
-    // OSRM API format: lon,lat;lon,lat;...
     const coords = coordinates.map(c => `${c.lng},${c.lat}`).join(';');
     const url = `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson`;
 
@@ -124,10 +115,8 @@ async function fetchRealRoute(coordinates, color, routeIdx, map) {
       const route = data.routes[0];
       const geometry = route.geometry;
 
-      // GeoJSON koordinatlarını Leaflet formatına çevir
       const latLngs = geometry.coordinates.map(coord => [coord[1], coord[0]]);
 
-      // Haritaya çiz
       L.polyline(latLngs, {
         color: color || '#3388ff',
         weight: 5,
@@ -139,7 +128,6 @@ async function fetchRealRoute(coordinates, color, routeIdx, map) {
       console.log(`✅ Rota ${routeIdx} gerçek yollarla çizildi (${(route.distance / 1000).toFixed(2)} km)`);
     } else {
       console.warn(`⚠️ Rota ${routeIdx} bulunamadı, fallback çizgi kullanıyorum`);
-      // Fallback: Düz çizgi
       const fallbackCoords = coordinates.map(c => [c.lat, c.lng]);
       L.polyline(fallbackCoords, {
         color: color || '#3388ff',
@@ -150,7 +138,6 @@ async function fetchRealRoute(coordinates, color, routeIdx, map) {
     }
   } catch (error) {
     console.error(`❌ Rota ${routeIdx} hatası:`, error);
-    // Fallback: Düz çizgi
     const fallbackCoords = coordinates.map(c => [c.lat, c.lng]);
     L.polyline(fallbackCoords, {
       color: color || '#3388ff',
@@ -160,6 +147,7 @@ async function fetchRealRoute(coordinates, color, routeIdx, map) {
     }).addTo(map);
   }
 }
+
 function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stations, setStations] = useState([]);
@@ -200,12 +188,7 @@ function Admin() {
     try {
       await axios.post(
         `${API_URL}/routes/add-station`,
-        newStation,
-        {
-          headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`
-          }
-        }
+        newStation
       );
 
       setMessage('✅ İstasyon başarıyla eklendi!');
@@ -216,21 +199,10 @@ function Admin() {
       setMessage('❌ ' + (error.response?.data?.error || 'İstasyon eklenemedi!'));
     }
   };
-useEffect(() => {
-  // Leaflet Routing Machine'e gerek yok!
-  console.log('✅ Harita hazır!');
-}, []);
 
   const loadScenarioAnalysis = async () => {
     try {
-      const response = await axios.get(
-        `${API_URL}/routes/scenario-analysis`,
-        {
-          headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`
-          }
-        }
-      );
+      const response = await axios.get(`${API_URL}/routes/scenario-analysis`);
       setScenarioAnalysis(response.data.analysis);
       setMessage('✅ Senaryo analizi yüklendi!');
     } catch (error) {
@@ -252,11 +224,6 @@ useEffect(() => {
           name: newVehicle.name,
           capacity_kg: parseInt(newVehicle.capacity_kg),
           rental_cost: parseInt(newVehicle.rental_cost) || 200
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`
-          }
         }
       );
 
@@ -275,15 +242,7 @@ useEffect(() => {
     }
 
     try {
-      await axios.delete(
-        `${API_URL}/routes/stations/${stationId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`
-          }
-        }
-      );
-
+      await axios.delete(`${API_URL}/routes/stations/${stationId}`);
       setMessage('✅ İstasyon başarıyla silindi!');
       loadStations();
       setTimeout(() => setMessage(''), 3000);
@@ -298,15 +257,7 @@ useEffect(() => {
     }
 
     try {
-      await axios.delete(
-        `${API_URL}/routes/vehicles/${vehicleId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`
-          }
-        }
-      );
-
+      await axios.delete(`${API_URL}/routes/vehicles/${vehicleId}`);
       setMessage('✅ Araç başarıyla silindi!');
       loadVehicles();
       setTimeout(() => setMessage(''), 3000);
@@ -321,19 +272,27 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'dashboard') {
-      console.log('📍 Dashboard açıldı');
-      setAllRoutePolylines([]);
-      setRoutePolylines([]);
-      
-      if (stations.length > 0) {
-        console.log('📍 loadAllRoutes çağrılıyor');
-        loadAllRoutes();
-      } else {
-        console.log('⚠️ Stations yüklenmedi!');
-      }
+  if (activeTab === 'dashboard') {
+    console.log('📍 Dashboard açıldı');
+    setAllRoutePolylines([]);
+    setRoutePolylines([]);
+    
+    // ✅ TOKEN KONTROL ET
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      console.log('⚠️ Token yok, giriş yapınız!');
+      setMessage('❌ Lütfen giriş yapınız!');
+      return;
     }
-  }, [activeTab, stations]);
+    
+    if (stations.length > 0) {
+      console.log('📍 loadAllRoutes çağrılıyor');
+      loadAllRoutes();
+    } else {
+      console.log('⚠️ Stations yüklenmedi!');
+    }
+  }
+}, [activeTab, stations]);
 
   const loadStations = async () => {
     try {
@@ -354,83 +313,68 @@ useEffect(() => {
   };
 
   const drawAllRoutesWithData = (routesToDraw) => {
-  console.log('🎨 drawAllRoutesWithData içinde, routes:', routesToDraw);
-  
-  if (!routesToDraw || routesToDraw.length === 0) {
-    console.log('⚠️ Routes boş!');
-    return;
-  }
-
-  const newPolylines = [];
-  const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
-
-  routesToDraw.forEach((route, routeIndex) => {
-    console.log(`📍 Route ${routeIndex}:`, route);
-
-    let stationsArray = route.stations;
-    if (typeof route.stations === 'string') {
-      stationsArray = route.stations.split(',').map(s => parseInt(s));
+    console.log('🎨 drawAllRoutesWithData içinde, routes:', routesToDraw);
+    
+    if (!routesToDraw || routesToDraw.length === 0) {
+      console.log('⚠️ Routes boş!');
+      return;
     }
 
-    newPolylines.push({
-      stationIds: stationsArray,  // ✅ İstasyon ID'lerini gönder
-      color: colors[routeIndex % colors.length],
-      weight: 4,
-      opacity: 0.8
+    const newPolylines = [];
+    const colors = ['#FF0000', '#0000FF', '#00AA00', '#FF9900', '#FF00FF', '#00FFFF', '#FFFF00', '#00FF00'];
+
+    routesToDraw.forEach((route, routeIndex) => {
+      console.log(`📍 Route ${routeIndex}:`, route);
+
+      let stationsArray = route.stations;
+      if (typeof route.stations === 'string') {
+        stationsArray = route.stations.split(',').map(s => parseInt(s));
+      }
+
+      newPolylines.push({
+        stationIds: stationsArray,
+        color: colors[routeIndex % colors.length],
+        weight: 4,
+        opacity: 0.8
+      });
     });
-  });
 
-  setAllRoutePolylines(newPolylines);
-};
+    setAllRoutePolylines(newPolylines);
+  };
+
   const loadPendingCargos = async () => {
-  try {
-    const response = await axios.get(
-      `${API_URL}/routes/pending-cargos`,  // ✅ BURAYI GÜNCELLE
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
-        }
-      }
-    );
-    setPendingCargos(response.data.data);
-    setMessage('✅ Bekleyen kargolar yüklendi!');
-  } catch (error) {
-    setMessage('❌ Kargolar yüklenemedi!');
-    console.error(error);
-  }
-};
+    try {
+      const response = await axios.get(`${API_URL}/routes/pending-cargos`);
+      setPendingCargos(response.data.data);
+      setMessage('✅ Bekleyen kargolar yüklendi!');
+    } catch (error) {
+      setMessage('❌ Kargolar yüklenemedi!');
+      console.error(error);
+    }
+  };
 
-const rejectCargo = async (cargoId) => {
-  if (!window.confirm('Bu kargoyı reddetmek istediğinize emin misiniz?')) {
-    return;
-  }
+  const rejectCargo = async (cargoId) => {
+    if (!window.confirm('Bu kargoyı reddetmek istediğinize emin misiniz?')) {
+      return;
+    }
 
-  try {
-    await axios.post(
-      `${API_URL}/routes/cargo-requests/${cargoId}/reject`,  // ✅ BURAYI GÜNCELLE
-      { reason: 'Admin tarafından reddedildi' },
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
-        }
-      }
-    );
-    setMessage('✅ Kargo başarıyla reddedildi!');
-    loadPendingCargos();
-    setTimeout(() => setMessage(''), 3000);
-  } catch (error) {
-    setMessage('❌ Kargo reddedilemedi!');
-  }
-};
+    try {
+      await axios.post(
+        `${API_URL}/routes/cargo-requests/${cargoId}/reject`,
+        { reason: 'Admin tarafından reddedildi' }
+      );
+      setMessage('✅ Kargo başarıyla reddedildi!');
+      loadPendingCargos();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage('❌ Kargo reddedilemedi!');
+    }
+  };
 
   const loadAllRoutes = async () => {
     try {
       console.log('📍 loadAllRoutes başlıyor...');
-      const response = await axios.get(`${API_URL}/routes/all`, {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
-        }
-      });
+      const response = await axios.get(`${API_URL}/routes/all`);
       
       console.log('✅ Routes geldi:', response.data.routes);
       setAllRoutes(response.data.routes);
@@ -441,112 +385,106 @@ const rejectCargo = async (cargoId) => {
     }
   };
 
- const calculateRoutes = async () => {
-  setLoading(true);
-  try {
-    console.log('🚀 Otomatik mod - Rota hesaplanıyor...');
-    
-    // Bekleyen kargo verilerini kontrol et
-    const cargoResponse = await axios.get(`${API_URL}/routes/pending-cargos`, {
-      headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
-    });
-
-    const cargos = cargoResponse.data.data;
-    const totalWeight = cargos.reduce((sum, c) => sum + c.cargo_weight_kg, 0);
-    const totalCount = cargos.reduce((sum, c) => sum + c.cargo_count, 0);
-
-    // ✅ OTOMATIK KARAR MEKANIZMASI
-    let selectedType = 'unlimited';
-    let reason = '';
-
-    if (totalWeight <= 2250) {
-      selectedType = 'fixed-3';
-      reason = `Toplam ağırlık ${totalWeight}kg ≤ 2250kg (3 araç yeterli)`;
-    } else if (totalWeight <= 3000) {
-      selectedType = 'fixed-4';
-      reason = `Toplam ağırlık ${totalWeight}kg > 2250kg (4 araç gerekli)`;
-    } else {
-      selectedType = 'unlimited';
-      reason = `Toplam ağırlık ${totalWeight}kg > 3000kg (Sınırsız araç)`;
-    }
-
-    console.log(`📊 Otomatik analiz: ${reason}`);
-
-    // ✅ ÖNCE autoAnalysis'i set et
-    const autoAnalysisData = {
-      selectedType,
-      reason,
-      totalWeight,
-      totalCount
-    };
-    setAutoAnalysis(autoAnalysisData);
-
-    const response = await axios.post(
-      `${API_URL}/routes/calculate`,
-      { problem_type: selectedType },
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
-        }
+  const calculateRoutes = async () => {
+    setLoading(true);
+    try {
+      console.log('🚀 Otomatik mod - Rota hesaplanıyor...');
+      
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        setMessage('❌ Admin token bulunamadı! Lütfen giriş yapınız.');
+        setLoading(false);
+        return;
       }
-    );
 
-    console.log('✅ Routes calculated:', response.data);
-    setRoutes(response.data.routes);
-    setStats({
-      totalCost: parseFloat(response.data.totalCost),
-      vehiclesUsed: response.data.vehiclesUsed,
-      totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
-      totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
-    });
+      const cargoResponse = await axios.get(`${API_URL}/routes/pending-cargos`);
 
-    // ✅ autoAnalysis'i vehicles bilgisiyle güncelle
-    setAutoAnalysis(prev => ({
-      ...prev,
-      vehiclesUsed: response.data.vehiclesUsed,
-      acceptance: response.data.acceptanceRate
-    }));
+      const cargos = cargoResponse.data.data;
+      const totalWeight = cargos.reduce((sum, c) => sum + c.cargo_weight_kg, 0);
+      const totalCount = cargos.reduce((sum, c) => sum + c.cargo_count, 0);
 
-    if (response.data.suggestedRejectedCargo && response.data.suggestedRejectedCargo.length > 0) {
-      setRejectedCargo(response.data.suggestedRejectedCargo);
-      setMessage(
-        `📊 ${reason}\n` +
-        `⚠️ ${response.data.suggestedRejectedCargo.length} istasyon red EDİLEBİLİR (admin onayı gerekli)! ` +
-        `Mevcut kabul: ${response.data.acceptanceRate}%`
+      let selectedType = 'unlimited';
+      let reason = '';
+
+      if (totalWeight <= 2250) {
+        selectedType = 'fixed-3';
+        reason = `Toplam ağırlık ${totalWeight}kg ≤ 2250kg (3 araç yeterli)`;
+      } else if (totalWeight <= 3000) {
+        selectedType = 'fixed-4';
+        reason = `Toplam ağırlık ${totalWeight}kg > 2250kg (4 araç gerekli)`;
+      } else {
+        selectedType = 'unlimited';
+        reason = `Toplam ağırlık ${totalWeight}kg > 3000kg (Sınırsız araç)`;
+      }
+
+      console.log(`📊 Otomatik analiz: ${reason}`);
+
+      const autoAnalysisData = {
+        selectedType,
+        reason,
+        totalWeight,
+        totalCount
+      };
+      setAutoAnalysis(autoAnalysisData);
+
+      const response = await axios.post(
+        `${API_URL}/routes/calculate`,
+        { problem_type: selectedType }
       );
-    } else {
-      setRejectedCargo([]);
-      setMessage(`📊 ${reason}\n✅ Tüm kargolar başarıyla atandı!`);
+
+      console.log('✅ Routes calculated:', response.data);
+      setRoutes(response.data.routes);
+      setStats({
+        totalCost: parseFloat(response.data.totalCost),
+        vehiclesUsed: response.data.vehiclesUsed,
+        totalWeight: response.data.routes.reduce((sum, r) => sum + parseInt(r.totalWeight), 0),
+        totalDistance: response.data.routes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0)
+      });
+
+      setAutoAnalysis(prev => ({
+        ...prev,
+        vehiclesUsed: response.data.vehiclesUsed,
+        acceptance: response.data.acceptanceRate
+      }));
+
+      if (response.data.suggestedRejectedCargo && response.data.suggestedRejectedCargo.length > 0) {
+        setRejectedCargo(response.data.suggestedRejectedCargo);
+        setMessage(
+          `📊 ${reason}\n` +
+          `⚠️ ${response.data.suggestedRejectedCargo.length} istasyon red EDİLEBİLİR (admin onayı gerekli)! ` +
+          `Mevcut kabul: ${response.data.acceptanceRate}%`
+        );
+      } else {
+        setRejectedCargo([]);
+        setMessage(`📊 ${reason}\n✅ Tüm kargolar başarıyla atandı!`);
+      }
+
+      if (response.data.rejectedCargoByWeight && response.data.rejectedCargoByWeight.length > 0) {
+        const lightCargoMsg = `🔔 ${response.data.rejectedCargoByWeight.length} istasyon minimum ${response.data.minCargoWeight}kg altında (toplam: ${response.data.rejectedCargoByWeight.reduce((s, c) => s + c.weight, 0)}kg)`;
+        
+        setMessage(
+          `📊 ${reason}\n` +
+          lightCargoMsg + `\n` +
+          (response.data.suggestedRejectedCargo?.length > 0 
+            ? `⚠️ ${response.data.suggestedRejectedCargo.length} istasyon kapasite yetersizliği` 
+            : `✅ Tüm uygun kargolar atandı!`)
+        );
+      }
+
+      loadAllRoutes();
+
+    } catch (error) {
+      console.error('Error calculating routes:', error);
+      setMessage('❌ Rota hesaplanırken hata oluştu: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setLoading(false);
     }
-
-    if (response.data.rejectedCargoByWeight && response.data.rejectedCargoByWeight.length > 0) {
-  const lightCargoMsg = `🔔 ${response.data.rejectedCargoByWeight.length} istasyon minimum ${response.data.minCargoWeight}kg altında (toplam: ${response.data.rejectedCargoByWeight.reduce((s, c) => s + c.weight, 0)}kg)`;
-  
-  setMessage(
-    `📊 ${autoAnalysis.reason}\n` +
-    lightCargoMsg + `\n` +
-    (response.data.suggestedRejectedCargo?.length > 0 
-      ? `⚠️ ${response.data.suggestedRejectedCargo.length} istasyon kapasite yetersizliği` 
-      : `✅ Tüm uygun kargolar atandı!`)
-  );
-}
-
-    loadAllRoutes();
-
-  } catch (error) {
-    console.error('Error calculating routes:', error);
-    alert('Rota hesaplanırken hata oluştu: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
-
-
+  };
 
   return (
     <div className="admin-container">
       <div className="sidebar">
-        <h2> Admin</h2>
+        <h2>👤 Admin</h2>
         <nav>
           <button
             className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -565,13 +503,13 @@ const rejectCargo = async (cargoId) => {
             className={`nav-btn ${activeTab === 'station-add' ? 'active' : ''}`}
             onClick={() => setActiveTab('station-add')}
           >
-             İstasyon Ekle
+            📍 İstasyon Ekle
           </button>
           <button
             className={`nav-btn ${activeTab === 'vehicle-rent' ? 'active' : ''}`}
             onClick={() => setActiveTab('vehicle-rent')}
           >
-             Araç Kirala
+            🚗 Araç Kirala
           </button>
           
           <button
@@ -587,12 +525,12 @@ const rejectCargo = async (cargoId) => {
             Araçlar
           </button>
           <button
-          className={`nav-btn ${activeTab === 'cargo-management' ? 'active' : ''}`}
-          onClick={() => setActiveTab('cargo-management')}
-         >
-           Kargo Yönetimi
+            className={`nav-btn ${activeTab === 'cargo-management' ? 'active' : ''}`}
+            onClick={() => setActiveTab('cargo-management')}
+          >
+            📦 Kargo Yönetimi
           </button>
-          <a href="/" className="nav-btn"> Çıkış</a>
+          <a href="/" className="nav-btn">🚪 Çıkış</a>
         </nav>
       </div>
 
@@ -605,14 +543,14 @@ const rejectCargo = async (cargoId) => {
               onClick={calculateRoutes}
               disabled={loading}
             >
-              {loading ? '⏳ Hesaplanıyor...' : ' Rota Planla'}
+              {loading ? '⏳ Hesaplanıyor...' : '🚀 Rota Planla'}
             </button>
             
             <button 
               className="btn btn-info"
               onClick={loadScenarioAnalysis}
             >
-               Senaryo Analizi
+              📊 Senaryo Analizi
             </button>
           </div>
         </div>
@@ -623,13 +561,12 @@ const rejectCargo = async (cargoId) => {
             marginBottom: '20px',
             borderRadius: '4px',
             backgroundColor: message.includes('✅') ? '#d4edda' : '#f8d7da',
-            color: message.includes('✅') ? '#155724' : '#721c24'
+            color: message.includes('✅') ? '#155724' : '#721c24',
+            whiteSpace: 'pre-line'
           }}>
             {message}
           </div>
         )}
-
-       
 
         {activeTab === 'dashboard' && (
           <section className="section">
@@ -646,54 +583,43 @@ const rejectCargo = async (cargoId) => {
                 border: '1px solid #ddd'
               }}>
                 <MapContainer
-  style={{ width: '100%', height: '100%' }}
-  center={[40.8667, 29.85]}
-  zoom={11}
-  className="leaflet-map"
->
-  <TileLayer
-    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-    attribution='© OpenStreetMap contributors'
-  />
-  <FitBoundsComponent stations={stations} routePolylines={allRoutePolylines} />
-  <RouteLines routePolylines={allRoutePolylines} stations={stations} />
-  
-  {stations.map(station => (
-    <Marker
-      key={station.id}
-      position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
-      icon={L.icon({
-        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-      })}
-    >
-      <Popup>
-        <strong>{station.name}</strong>
-        <br />
-        Lat: {parseFloat(station.latitude).toFixed(4)}
-        <br />
-        Lon: {parseFloat(station.longitude).toFixed(4)}
-      </Popup>
-    </Marker>
-  ))}
-</MapContainer>
+                  style={{ width: '100%', height: '100%' }}
+                  center={[40.8667, 29.85]}
+                  zoom={11}
+                  className="leaflet-map"
+                >
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='© OpenStreetMap contributors'
+                  />
+                  <FitBoundsComponent stations={stations} routePolylines={allRoutePolylines} />
+                  <RouteLines routePolylines={allRoutePolylines} stations={stations} />
+                  
+                  {stations.map(station => (
+                    <Marker
+                      key={station.id}
+                      position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
+                      icon={L.icon({
+                        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                      })}
+                    >
+                      <Popup>
+                        <strong>{station.name}</strong>
+                        <br />
+                        Lat: {parseFloat(station.latitude).toFixed(4)}
+                        <br />
+                        Lon: {parseFloat(station.longitude).toFixed(4)}
+                      </Popup>
+                    </Marker>
+                  ))}
+                </MapContainer>
               </div>
             )}
-
-              {rejectedCargo.length > 0 && (
-     <div style={{ 
-    backgroundColor: '#fff3cd', 
-    borderLeft: '4px solid #ff9800', 
-    padding: '12px 15px', 
-    marginBottom: '20px',
-    borderRadius: '4px'
-  }}>
-  </div>
-)}
 
             <h3>Tüm Rotalar</h3>
             <table className="table">
@@ -729,7 +655,7 @@ const rejectCargo = async (cargoId) => {
 
             {scenarioAnalysis && (
               <div style={{ marginTop: '30px', backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px' }}>
-                <h3> Senaryo Analizi</h3>
+                <h3>📈 Senaryo Analizi</h3>
                 <table className="table">
                   <tbody>
                     <tr>
@@ -759,7 +685,7 @@ const rejectCargo = async (cargoId) => {
                   </tbody>
                 </table>
 
-                <h4 style={{ marginTop: '20px' }}> Araç Detayları</h4>
+                <h4 style={{ marginTop: '20px' }}>🚗 Araç Detayları</h4>
                 <table className="table">
                   <thead>
                     <tr>
@@ -773,19 +699,17 @@ const rejectCargo = async (cargoId) => {
                   </thead>
                   <tbody>
                     {scenarioAnalysis.vehicleDetails.map((v, idx) => (
-  <tr key={idx}>
-    <td>{v.vehicleId}</td>
-    <td>{v.stations}</td>
-    <td>{parseFloat(v.distance).toFixed(2)}</td>
-    <td>{v.weight}</td>
-    <td>{v.cost}</td>
-    <td>{v.utilization}</td>
-  </tr>
-))}
+                      <tr key={idx}>
+                        <td>{v.vehicleId}</td>
+                        <td>{v.stations}</td>
+                        <td>{parseFloat(v.distance).toFixed(2)}</td>
+                        <td>{v.weight}</td>
+                        <td>{v.cost}</td>
+                        <td>{v.utilization}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
-
-                
               </div>
             )}
           </section>
@@ -793,7 +717,7 @@ const rejectCargo = async (cargoId) => {
 
         {activeTab === 'rotalar' && (
           <section className="section">
-            <h2> Detaylı Rota Bilgileri</h2>
+            <h2>📋 Detaylı Rota Bilgileri</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -816,13 +740,13 @@ const rejectCargo = async (cargoId) => {
                       <td>
                         {route.stations
                           .map(stationId => {
-                            if (stationId === 13) return 'UNI';
+                            if (stationId === 0 || stationId === 13) return 'UNI';
                             const station = stations.find(s => s.id === stationId);
                             return station ? station.name.substring(0, 3) : `S${stationId}`;
                           })
                           .join(' → ')}
                       </td>
-                      <td>{route.stations.filter(s => s !== 13).length}</td>
+                      <td>{route.stations.filter(s => s !== 0 && s !== 13).length}</td>
                       <td>{route.totalWeight} kg</td>
                       <td>₺ {route.totalCost}</td>
                     </tr>
@@ -833,11 +757,9 @@ const rejectCargo = async (cargoId) => {
           </section>
         )}
 
-        
-
         {activeTab === 'istasyonlar' && (
           <section className="section">
-            <h2> İstasyonlar</h2>
+            <h2>📍 İstasyonlar</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -860,7 +782,7 @@ const rejectCargo = async (cargoId) => {
                         className="btn btn-danger"
                         onClick={() => deleteStation(station.id)}
                       >
-                         Sil
+                        🗑️ Sil
                       </button>
                     </td>
                   </tr>
@@ -872,7 +794,7 @@ const rejectCargo = async (cargoId) => {
 
         {activeTab === 'araclar' && (
           <section className="section">
-            <h2> Araçlar</h2>
+            <h2>🚗 Araçlar</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -895,7 +817,7 @@ const rejectCargo = async (cargoId) => {
                         className="btn btn-danger"
                         onClick={() => deleteVehicle(vehicle.id)}
                       >
-                         Sil
+                        🗑️ Sil
                       </button>
                     </td>
                   </tr>
@@ -904,82 +826,81 @@ const rejectCargo = async (cargoId) => {
             </table>
           </section>
         )}
-       
 
         {activeTab === 'cargo-management' && (
-  <section className="section">
-    <h2> Bekleyen Kargolar - Yönetim</h2>
-    
-    <div style={{ marginBottom: '20px' }}>
-      <button 
-        className="btn btn-warning"
-        onClick={loadPendingCargos}
-        style={{ marginRight: '10px' }}
-      >
-        🔄 Bekleyen Kargolar Yükle
-      </button>
-    </div>
+          <section className="section">
+            <h2>📦 Bekleyen Kargolar - Yönetim</h2>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <button 
+                className="btn btn-warning"
+                onClick={loadPendingCargos}
+                style={{ marginRight: '10px' }}
+              >
+                🔄 Bekleyen Kargolar Yükle
+              </button>
+            </div>
 
-    <table className="table">
-      <thead>
-        <tr>
-          <th>Kargo ID</th>
-          <th>Kullanıcı</th>
-          <th>İstasyon</th>
-          <th>Ağırlık (kg)</th>
-          <th>Kargo Sayısı</th>
-          <th>Status</th>
-          <th>İşlem</th>
-        </tr>
-      </thead>
-      <tbody>
-        {pendingCargos.length === 0 ? (
-          <tr>
-            <td colSpan="7" style={{ textAlign: 'center' }}>Bekleyen kargo yok</td>
-          </tr>
-        ) : (
-          pendingCargos.map((cargo, idx) => {
-            const station = stations.find(s => s.id === cargo.station_id);
-            return (
-              <tr key={idx}>
-                <td>{cargo.id}</td>
-                <td>{cargo.user_name || 'Bilinmiyor'}</td>
-                <td>{station?.name || `Station ${cargo.station_id}`}</td>
-                <td>{cargo.cargo_weight_kg} kg</td>
-                <td>{cargo.cargo_count}</td>
-                <td>
-                  <span style={{ 
-                    backgroundColor: cargo.status === 'pending' ? '#ffc107' : '#28a745',
-                    color: 'white',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '12px'
-                  }}>
-                    {cargo.status === 'pending' ? '⏳ Beklemede' : '✅ Atandı'}
-                  </span>
-                </td>
-                <td>
-                  {cargo.status === 'pending' && (
-                    <button 
-                      className="btn btn-danger"
-                      onClick={() => rejectCargo(cargo.id)}
-                    >
-                       Red Et
-                    </button>
-                  )}
-                </td>
-              </tr>
-            );
-          })
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Kargo ID</th>
+                  <th>Kullanıcı</th>
+                  <th>İstasyon</th>
+                  <th>Ağırlık (kg)</th>
+                  <th>Kargo Sayısı</th>
+                  <th>Status</th>
+                  <th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingCargos.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center' }}>Bekleyen kargo yok</td>
+                  </tr>
+                ) : (
+                  pendingCargos.map((cargo, idx) => {
+                    const station = stations.find(s => s.id === cargo.station_id);
+                    return (
+                      <tr key={idx}>
+                        <td>{cargo.id}</td>
+                        <td>{cargo.user_name || 'Bilinmiyor'}</td>
+                        <td>{station?.name || `Station ${cargo.station_id}`}</td>
+                        <td>{cargo.cargo_weight_kg} kg</td>
+                        <td>{cargo.cargo_count}</td>
+                        <td>
+                          <span style={{ 
+                            backgroundColor: cargo.status === 'pending' ? '#ffc107' : '#28a745',
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}>
+                            {cargo.status === 'pending' ? '⏳ Beklemede' : '✅ Atandı'}
+                          </span>
+                        </td>
+                        <td>
+                          {cargo.status === 'pending' && (
+                            <button 
+                              className="btn btn-danger"
+                              onClick={() => rejectCargo(cargo.id)}
+                            >
+                              ❌ Red Et
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </section>
         )}
-      </tbody>
-    </table>
-  </section>
-)}
 
         {activeTab === 'station-add' && (
           <section className="section">
-            <h2> Yeni İstasyon Ekle</h2>
+            <h2>➕ Yeni İstasyon Ekle</h2>
             <form onSubmit={addStation} style={{ maxWidth: '500px' }}>
               <div className="form-group">
                 <label>İstasyon Adı:</label>
@@ -1017,7 +938,7 @@ const rejectCargo = async (cargoId) => {
               </div>
 
               <button type="submit" className="btn btn-success">
-                 İstasyon Ekle
+                ➕ İstasyon Ekle
               </button>
             </form>
           </section>
@@ -1025,13 +946,13 @@ const rejectCargo = async (cargoId) => {
 
         {activeTab === 'vehicle-rent' && (
           <section className="section">
-            <h2> Araç Kirala</h2>
+            <h2>🚗 Araç Kirala</h2>
             
             <div style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
               <h3>Sistem Parametreleri</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="form-group">
-                  <label> Yakıt Fiyatı (₺/L):</label>
+                  <label>⛽ Yakıt Fiyatı (₺/L):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1040,7 +961,7 @@ const rejectCargo = async (cargoId) => {
                   />
                 </div>
                 <div className="form-group">
-                  <label> Km Maliyeti (₺/km):</label>
+                  <label>🛣️ Km Maliyeti (₺/km):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1049,15 +970,15 @@ const rejectCargo = async (cargoId) => {
                   />
                 </div>
                 <div className="form-group">
-               <label> Minimum Kargo Ağırlığı (kg):</label>
-               <input
-                  type="number"
-                  step="1"
-                 value={parameters.min_cargo_weight}
-                 onChange={(e) => setParameters({...parameters, min_cargo_weight: parseInt(e.target.value)})}
-                 placeholder="Örn: 5 (5kg altında red et)"
-                />
-               </div>
+                  <label>⚖️ Minimum Kargo Ağırlığı (kg):</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={parameters.min_cargo_weight}
+                    onChange={(e) => setParameters({...parameters, min_cargo_weight: parseInt(e.target.value)})}
+                    placeholder="Örn: 5"
+                  />
+                </div>
               </div>
               <button 
                 type="button"
@@ -1066,12 +987,7 @@ const rejectCargo = async (cargoId) => {
                   try {
                     await axios.post(
                       `${API_URL}/routes/parameters`,
-                      parameters,
-                      {
-                        headers: {
-                          'Authorization': `Bearer ${ADMIN_TOKEN}`
-                        }
-                      }
+                      parameters
                     );
                     setMessage('✅ Parametreler kaydedildi!');
                     setTimeout(() => setMessage(''), 3000);
@@ -1081,7 +997,7 @@ const rejectCargo = async (cargoId) => {
                 }}
                 style={{ marginTop: '10px' }}
               >
-                 Parametreleri Kaydet
+                💾 Parametreleri Kaydet
               </button>
             </div>
 
@@ -1119,7 +1035,7 @@ const rejectCargo = async (cargoId) => {
               </div>
 
               <button type="submit" className="btn btn-success">
-                 Araç Kirala
+                🚗 Araç Kirala
               </button>
             </form>
           </section>
@@ -1128,6 +1044,5 @@ const rejectCargo = async (cargoId) => {
     </div>
   );
 }
-
 
 export default Admin;
