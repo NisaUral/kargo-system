@@ -9,7 +9,7 @@ function Login() {
   const [loginData, setLoginData] = useState({
     email: '',
     password: '',
-    userType: 'user'  // ✅ EKLE
+    userType: 'user'
   });
   const [registerData, setRegisterData] = useState({
     name: '',
@@ -28,10 +28,10 @@ function Login() {
 
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
-  email: loginData.email,
-  password: loginData.password,
-  role: loginData.userType  // ✅ BU SATIRI EKLE
-});
+        email: loginData.email,
+        password: loginData.password,
+        role: loginData.userType
+      });
 
       if (response.data.token) {
         const tokenKey = response.data.user.role === 'admin' ? 'adminToken' : 'userToken';
@@ -40,8 +40,6 @@ function Login() {
         localStorage.setItem('userRole', response.data.user.role);
         localStorage.setItem('userId', response.data.user.id);
         
-        console.log('✅ Giriş başarılı:', response.data.user);
-        
         if (response.data.user.role === 'admin') {
           window.location.href = '/admin';
         } else {
@@ -49,7 +47,7 @@ function Login() {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Giriş başarısız!');
+      setError(err.response?.data?.error || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -60,17 +58,17 @@ function Login() {
     setError('');
 
     if (!registerData.name || !registerData.email || !registerData.password) {
-      setError('Tüm alanları doldurunuz!');
+      setError('All fields are required');
       return;
     }
 
     if (registerData.password !== registerData.confirmPassword) {
-      setError('Şifreler eşleşmiyor!');
+      setError('Passwords do not match');
       return;
     }
 
     if (registerData.password.length < 6) {
-      setError('Şifre en az 6 karakter olmalı!');
+      setError('Password must be at least 6 characters');
       return;
     }
 
@@ -91,8 +89,6 @@ function Login() {
         localStorage.setItem('userRole', response.data.user.role);
         localStorage.setItem('userId', response.data.user.id);
         
-        console.log('✅ Kayıt başarılı:', response.data.user);
-        
         if (response.data.user.role === 'admin') {
           window.location.href = '/admin';
         } else {
@@ -100,7 +96,7 @@ function Login() {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Kayıt başarısız!');
+      setError(err.response?.data?.error || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -124,151 +120,170 @@ function Login() {
 
   return (
     <div className="login-container">
-      <div className="login-card">
-        <h1>📦 Kargo İşletme Sistemi</h1>
+      <div className="login-wrapper">
+        <div className="login-card">
+          <div className="login-header">
+            <h1>Kargo Yönetim Sistemi</h1>
+            <p>Kargolarını Yönet</p>
+          </div>
 
-        <div className="tabs">
-          <button
-            className={`tab ${activeTab === 'login' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('login');
-              setError('');
-            }}
-          >
-            Giriş Yap
-          </button>
-          <button
-            className={`tab ${activeTab === 'register' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('register');
-              setError('');
-            }}
-          >
-            Kayıt Ol
-          </button>
+          <div className="tabs">
+            <button
+              className={`tab ${activeTab === 'login' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('login');
+                setError('');
+              }}
+            >
+              Giriş
+            </button>
+            <button
+              className={`tab ${activeTab === 'register' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('register');
+                setError('');
+              }}
+            >
+              Kayıt Ol
+            </button>
+          </div>
+
+          {error && <div className="error-message">{error}</div>}
+
+          {activeTab === 'login' && (
+            <form onSubmit={handleLogin}>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={loginData.email}
+                  onChange={handleLoginChange}
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Şifre</label>
+                <input
+                  type="password"
+                  name="password"
+                  value={loginData.password}
+                  onChange={handleLoginChange}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Hesap Tipi</label>
+                <select
+                  name="userType"
+                  value={loginData.userType}
+                  onChange={handleLoginChange}
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              <button type="submit" className="btn-submit" disabled={loading}>
+                {loading ? 'Logging in...' : 'Login'}
+              </button>
+            </form>
+          )}
+
+          {activeTab === 'register' && (
+            <form onSubmit={handleRegister}>
+              <div className="form-group">
+                <label>Full Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={registerData.name}
+                  onChange={handleRegisterChange}
+                  placeholder="John Doe"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Email Address</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={registerData.email}
+                  onChange={handleRegisterChange}
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Password</label>
+                <input
+                  type="password"
+                  name="password"
+                  value={registerData.password}
+                  onChange={handleRegisterChange}
+                  placeholder="••••••••"
+                  minLength="6"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Confirm Password</label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={registerData.confirmPassword}
+                  onChange={handleRegisterChange}
+                  placeholder="••••••••"
+                  minLength="6"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Account Type</label>
+                <select
+                  name="userType"
+                  value={registerData.userType}
+                  onChange={handleRegisterChange}
+                >
+                  <option value="user">User</option>
+                </select>
+                <small className="help-text">
+                  Contact administrator to create an admin account
+                </small>
+              </div>
+
+              <button type="submit" className="btn-submit" disabled={loading}>
+                {loading ? 'Creating account...' : 'Register'}
+              </button>
+
+              <p className="login-link">
+                Already have an account? 
+                <button 
+                  type="button"
+                  className="link-btn"
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    setActiveTab('login'); 
+                  }}
+                >
+                  Login here
+                </button>
+              </p>
+            </form>
+          )}
         </div>
 
-        {error && <div className="error-message">{error}</div>}
-
-        {activeTab === 'login' && (
-          <form onSubmit={handleLogin}>
-            <div className="form-group">
-              <label>Email:</label>
-              <input
-                type="email"
-                name="email"
-                value={loginData.email}
-                onChange={handleLoginChange}
-                placeholder="example@mail.com"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Şifre:</label>
-              <input
-                type="password"
-                name="password"
-                value={loginData.password}
-                onChange={handleLoginChange}
-                placeholder="••••••"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Giriş Türü:</label>
-              <select
-                name="userType"
-                value={loginData.userType}
-                onChange={handleLoginChange}
-              >
-                <option value="user">👤 Kullanıcı</option>
-                <option value="admin">🔐 Admin</option>
-              </select>
-            </div>
-
-            <button type="submit" className="btn-login" disabled={loading}>
-              {loading ? '⏳ Giriş Yapılıyor...' : '🔓 Giriş Yap'}
-            </button>
-          </form>
-        )}
-
-        {activeTab === 'register' && (
-          <form onSubmit={handleRegister}>
-            <div className="form-group">
-              <label>Ad Soyad:</label>
-              <input
-                type="text"
-                name="name"
-                value={registerData.name}
-                onChange={handleRegisterChange}
-                placeholder="Adınız Soyadınız"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Email:</label>
-              <input
-                type="email"
-                name="email"
-                value={registerData.email}
-                onChange={handleRegisterChange}
-                placeholder="example@mail.com"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Şifre:</label>
-              <input
-                type="password"
-                name="password"
-                value={registerData.password}
-                onChange={handleRegisterChange}
-                placeholder="••••••"
-                minLength="6"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Şifre Tekrar:</label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={registerData.confirmPassword}
-                onChange={handleRegisterChange}
-                placeholder="••••••"
-                minLength="6"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Hesap Türü:</label>
-              <select
-                name="userType"
-                value={registerData.userType}
-                onChange={handleRegisterChange}
-              >
-                <option value="user">👤 Kullanıcı</option>
-              </select>
-              <small style={{ color: '#666', marginTop: '5px', display: 'block' }}>
-                Admin hesabı için sistem yöneticisine başvurunuz
-              </small>
-            </div>
-
-            <button type="submit" className="btn-login" disabled={loading}>
-              {loading ? '⏳ Kayıt Yapılıyor...' : '✅ Kayıt Ol'}
-            </button>
-
-            <p style={{ textAlign: 'center', marginTop: '15px', color: '#666', fontSize: '13px' }}>
-              Zaten bir hesabınız var mı? <a href="#" onClick={(e) => { e.preventDefault(); setActiveTab('login'); }} style={{ color: '#3498db', textDecoration: 'none' }}>Giriş yapın</a>
-            </p>
-          </form>
-        )}
+        <div className="login-footer">
+          <p>© 2025 Cargo Management System. All rights reserved.</p>
+        </div>
       </div>
     </div>
   );

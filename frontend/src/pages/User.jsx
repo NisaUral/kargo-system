@@ -4,9 +4,9 @@ import axios from 'axios';
 import '../styles/User.css';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import '../styles/User.css';
 
 const API_URL = 'http://localhost:5000/api';
-const USER_TOKEN = localStorage.getItem('userToken');
 
 // FitBounds Component
 function FitBoundsComponent({ stations }) {
@@ -25,7 +25,8 @@ function FitBoundsComponent({ stations }) {
 }
 
 // Route Lines Component
-function RouteLines({ routePolylines }) {
+// Route Lines Component - GERÇEKİ ROTA ÇİZİMİ
+function RouteLines({ routePolylines, stations }) {
   const map = useMap();
   
   useEffect(() => {
@@ -36,20 +37,51 @@ function RouteLines({ routePolylines }) {
         }
       });
       
-      routePolylines.forEach((poly, idx) => {
-        if (poly.positions && poly.positions.length > 0) {
-          L.polyline(poly.positions, {
-            color: poly.color,
-            weight: poly.weight,
-            opacity: poly.opacity,
-            dashArray: poly.dashArray
-          }).addTo(map);
+      routePolylines.forEach((route, idx) => {
+        if (route.positions && route.positions.length >= 2) {
+          const coordinates = route.positions;
+          fetchRealRoute(coordinates, route.color, idx, map);
         }
       });
     }
-  }, [routePolylines, map]);
+  }, [routePolylines, map, stations]);
   
   return null;
+}
+
+// Gerçek rota isteme fonksiyonu
+async function fetchRealRoute(coordinates, color, routeIdx, map) {
+  try {
+    const coords = coordinates.map(c => `${c[1]},${c[0]}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const geometry = route.geometry;
+      const latLngs = geometry.coordinates.map(coord => [coord[1], coord[0]]);
+
+      L.polyline(latLngs, {
+        color: color || '#3498db',
+        weight: 5,
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+    } else {
+      const fallbackCoords = coordinates;
+      L.polyline(fallbackCoords, {
+        color: color || '#3498db',
+        weight: 5,
+        opacity: 0.5,
+        dashArray: '5, 5'
+      }).addTo(map);
+    }
+  } catch (error) {
+    console.error('Route error:', error);
+  }
 }
 
 function User() {
@@ -58,6 +90,7 @@ function User() {
   const [selectedCargo, setSelectedCargo] = useState(null);
   const [cargoRoute, setCargoRoute] = useState(null);
   const [routePolylines, setRoutePolylines] = useState([]);
+  const [message, setMessage] = useState('');
   const [formData, setFormData] = useState({
     station_id: '',
     cargo_count: '',
@@ -76,93 +109,98 @@ function User() {
       setStations(response.data.data);
     } catch (error) {
       console.error('Error loading stations:', error);
+      setMessage('Error loading stations');
     }
   };
 
   const loadMyCargos = async () => {
     try {
+      const userToken = localStorage.getItem('userToken');
       const response = await axios.get(`${API_URL}/cargo/my-cargos`, {
         headers: {
-          'Authorization': `Bearer ${USER_TOKEN}`
+          'Authorization': `Bearer ${userToken}`
         }
       });
       setMyCargos(response.data.data || []);
     } catch (error) {
       console.error('Error loading cargos:', error);
+      setMessage('Error loading shipments');
     }
   };
 
   const loadCargoRoute = async (cargoId) => {
-    try {
-      const response = await axios.get(`${API_URL}/cargo/route/${cargoId}`, {
-        headers: {
-          'Authorization': `Bearer ${USER_TOKEN}`
-        }
-      });
-
-      if (response.data.route) {
-        setCargoRoute(response.data.route);
-        drawRoute(response.data.route);
-      } else {
-        alert('Kargo henüz rotaya atanmadı!');
-        setCargoRoute(null);
-        setRoutePolylines([]);
+  try {
+    const userToken = localStorage.getItem('userToken');
+    const response = await axios.get(`${API_URL}/cargo/route/${cargoId}`, {
+      headers: {
+        'Authorization': `Bearer ${userToken}`
       }
-    } catch (error) {
-      console.error('Error loading route:', error);
-      alert('Rota yüklenemedi!');
+    });
+
+    console.log('Route Response:', response.data); // ← EKLE
+
+    if (response.data.route) {
+      console.log('Route Data:', response.data.route); // ← EKLE
+      setCargoRoute(response.data.route);
+      drawRoute(response.data.route);
+      setMessage('');
+    } else {
+      setMessage('Shipment not assigned to a route yet');
+      setCargoRoute(null);
+      setRoutePolylines([]);
     }
-  };
+  } catch (error) {
+    console.error('Error loading route:', error);
+    setMessage('Error loading route');
+  }
+};
 
   const drawRoute = (route) => {
-  // Route'dan stations al
-  let stations_list = route.stations;
-  
-  // Eğer string ise parse et
-  if (typeof stations_list === 'string') {
-    try {
-      stations_list = JSON.parse(stations_list);
-    } catch (e) {
-      console.error('JSON parse error:', e);
-      alert('Rota bilgileri hatalı!');
+    let stations_list = route.stations;
+    
+    if (typeof stations_list === 'string') {
+      try {
+        stations_list = JSON.parse(stations_list);
+      } catch (e) {
+        console.error('JSON parse error:', e);
+        setMessage('Invalid route information');
+        return;
+      }
+    }
+
+    if (!Array.isArray(stations_list)) {
+      console.error('Stations is not an array:', stations_list);
+      setMessage('Station list not found');
       return;
     }
-  }
 
-  // stations_list array değilse atla
-  if (!Array.isArray(stations_list)) {
-    console.error('Stations is not an array:', stations_list);
-    alert('İstasyon listesi bulunamadı!');
-    return;
-  }
+    const coordinates = stations_list
+      .map(stationId => {
+        if (stationId === 13) {
+          return [40.8667, 29.85];
+        }
+        const station = stations.find(s => s.id === stationId);
+        return station 
+          ? [parseFloat(station.latitude), parseFloat(station.longitude)]
+          : null;
+      })
+      .filter(c => c !== null);
 
-  const coordinates = stations_list
-    .map(stationId => {
-      if (stationId === 13) {
-        return [40.8667, 29.85]; // Üniversite
-      }
-      const station = stations.find(s => s.id === stationId);
-      return station 
-        ? [parseFloat(station.latitude), parseFloat(station.longitude)]
-        : null;
-    })
-    .filter(c => c !== null);
+    if (coordinates.length === 0) {
+      setMessage('Route coordinates could not be loaded');
+      return;
+    }
 
-  if (coordinates.length === 0) {
-    alert('Rota koordinatları yüklenemedi!');
-    return;
-  }
+    const polyline = {
+      positions: coordinates,
+      color: '#3498db',
+      weight: 3,
+      opacity: 0.7,
+      dashArray: '5, 5'
+    };
 
-  const polyline = {
-    positions: coordinates,
-    color: '#3498db',
-    weight: 3,
-    opacity: 0.7,
-    dashArray: '5, 5'
+    setRoutePolylines([polyline]);
   };
-
-  setRoutePolylines([polyline]);
-};
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -175,8 +213,10 @@ function User() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setMessage('');
 
     try {
+      const userToken = localStorage.getItem('userToken');
       await axios.post(
         `${API_URL}/cargo/send`,
         {
@@ -186,17 +226,18 @@ function User() {
         },
         {
           headers: {
-            'Authorization': `Bearer ${USER_TOKEN}`
+            'Authorization': `Bearer ${userToken}`
           }
         }
       );
 
-      alert('Kargo başarıyla gönderildi!');
+      setMessage('Shipment sent successfully');
       setFormData({ station_id: '', cargo_count: '', cargo_weight_kg: '' });
       loadMyCargos();
+      setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Error:', error);
-      alert('Kargo gönderilemedi: ' + error.message);
+      setMessage('Error: ' + (error.response?.data?.error || error.message));
     } finally {
       setLoading(false);
     }
@@ -204,169 +245,187 @@ function User() {
 
   return (
     <div className="user-container">
-      <div className="header">
-        <h1>Kargo Gönder</h1>
-        <a href="/" className="btn-back">← Geri</a>
+      <div className="user-header">
+        <div>
+          <h1>Kargo Gönder</h1>
+          <p className="subtitle">Kargolarını yönet</p>
+        </div>
+        <button 
+          className="logout-link"
+          onClick={() => {
+            localStorage.clear();
+            window.location.href = '/';
+          }}
+        >
+          çıkış
+        </button>
       </div>
 
-      <div className="card">
-        <h2>Kargo Gönderme Formu</h2>
-        
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>İstasyon Seçin:</label>
-            <select
-              name="station_id"
-              value={formData.station_id}
-              onChange={handleChange}
-              required
-            >
-              <option value="">-- İstasyon Seçin --</option>
-              {stations.map(station => (
-                <option key={station.id} value={station.id}>
-                  {station.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Kargo Sayısı:</label>
-            <input
-              type="number"
-              name="cargo_count"
-              min="1"
-              value={formData.cargo_count}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Ağırlık (kg):</label>
-            <input
-              type="number"
-              name="cargo_weight_kg"
-              min="1"
-              value={formData.cargo_weight_kg}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? '⏳ Gönderiliyor...' : 'Gönder'}
-          </button>
-        </form>
-      </div>
-
-      <div className="card">
-        <h2>Benim Kargolarım</h2>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>İD</th>
-              <th>İstasyon</th>
-              <th>Kargo Sayısı</th>
-              <th>Ağırlık (kg)</th>
-              <th>Durum</th>
-              <th>İşlem</th>
-            </tr>
-          </thead>
-          <tbody>
-            {myCargos.length === 0 ? (
-              <tr>
-                <td colSpan="6" style={{ textAlign: 'center' }}>Kargo yok</td>
-              </tr>
-            ) : (
-              myCargos.map(cargo => (
-                <tr key={cargo.id}>
-                  <td>{cargo.id}</td>
-                  <td>{cargo.station_name}</td>
-                  <td>{cargo.cargo_count}</td>
-                  <td>{cargo.cargo_weight_kg}</td>
-                  <td>
-                    <span className={`status status-${cargo.status}`}>
-                      {cargo.status}
-                    </span>
-                  </td>
-                  <td>
-                    <button 
-                      className="btn-show-route"
-                      onClick={() => {
-                        setSelectedCargo(cargo.id);
-                        loadCargoRoute(cargo.id);
-                      }}
-                    >
-                      Rota Gör
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-<a 
-  href="/" 
-  className="nav-btn"
-  onClick={(e) => {
-    e.preventDefault();
-    localStorage.clear();
-    window.location.href = '/';
-  }}
->
-  🚪 Çıkış
-</a>
-      {selectedCargo && cargoRoute && (
-        <div className="card">
-          <h2>📍 Kargo Rotası</h2>
-          
-          <div style={{ 
-            width: '100%',
-            height: '500px', 
-            marginBottom: '20px', 
-            borderRadius: '8px',
-            overflow: 'hidden',
-            border: '1px solid #ddd'
-          }}>
-            <MapContainer
-              style={{ width: '100%', height: '100%' }}
-            >
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='© OpenStreetMap contributors'
-              />
-              <FitBoundsComponent stations={stations} />
-              <RouteLines routePolylines={routePolylines} />
-              
-              {stations.map(station => (
-                <Marker
-                  key={station.id}
-                  position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
-                  icon={L.icon({
-                    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-                    iconSize: [25, 41],
-                    iconAnchor: [12, 41],
-                    popupAnchor: [1, -34],
-                    shadowSize: [41, 41]
-                  })}
-                >
-                  <Popup>{station.name}</Popup>
-                </Marker>
-              ))}
-            </MapContainer>
-          </div>
-
-          <div className="route-info">
-            <h3>Rota Bilgileri:</h3>
-            <p><strong>Araç:</strong> {cargoRoute.vehicle_id}</p>
-            <p><strong>Mesafe:</strong> {cargoRoute.total_distance} km</p>
-            <p><strong>Ağırlık:</strong> {cargoRoute.total_weight} kg</p>
-          </div>
+      {message && (
+        <div className={`message ${message.includes('Error') ? 'error' : 'success'}`}>
+          {message}
         </div>
       )}
+
+      <div className="user-content">
+        <div className="card">
+          <h2>Gönderim Formu</h2>
+          
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>Durak Seç:</label>
+              <select
+                name="station_id"
+                value={formData.station_id}
+                onChange={handleChange}
+                required
+              >
+                <option value="">-- Choose a station --</option>
+                {stations.map(station => (
+                  <option key={station.id} value={station.id}>
+                    {station.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Kargo sayısı:</label>
+                <input
+                  type="number"
+                  name="cargo_count"
+                  min="1"
+                  value={formData.cargo_count}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Kilo (kg):</label>
+                <input
+                  type="number"
+                  name="cargo_weight_kg"
+                  min="1"
+                  value={formData.cargo_weight_kg}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-submit" disabled={loading}>
+              {loading ? 'Sending...' : 'Kargo Gönder'}
+            </button>
+          </form>
+        </div>
+
+        <div className="card">
+          <h2>Kargolarım</h2>
+          
+          {myCargos.length === 0 ? (
+            <div className="empty-state">
+              <p>henüz Kargo Gönderilmedi</p>
+            </div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Station</th>
+                  <th>Items</th>
+                  <th>Weight (kg)</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myCargos.map(cargo => (
+                  <tr key={cargo.id}>
+                    <td>{cargo.id}</td>
+                    <td>{cargo.station_name}</td>
+                    <td>{cargo.cargo_count}</td>
+                    <td>{cargo.cargo_weight_kg}</td>
+                    <td>
+                      <span className={`status-badge ${cargo.status}`}>
+                        {cargo.status === 'pending' ? 'Pending' : 'Assigned'}
+                      </span>
+                    </td>
+                    <td>
+                      <button 
+                        className="btn btn-secondary btn-small"
+                        onClick={() => {
+                          setSelectedCargo(cargo.id);
+                          loadCargoRoute(cargo.id);
+                        }}
+                      >
+                        Rota Görüntüle
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {selectedCargo && cargoRoute && (
+          <div className="card">
+            <h2>Rota</h2>
+            
+            <div className="map-container">
+              <MapContainer
+  style={{ width: '100%', height: '100%' }}
+  center={[40.8667, 29.85]}
+  zoom={11}
+>
+  <TileLayer
+    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    attribution='© OpenStreetMap contributors'
+  />
+  <FitBoundsComponent stations={stations} />
+  <RouteLines routePolylines={routePolylines} stations={stations} />
+                
+                {stations.map(station => (
+                  <Marker
+                    key={station.id}
+                    position={[parseFloat(station.latitude), parseFloat(station.longitude)]}
+                    icon={L.icon({
+                      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+                      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                      iconSize: [25, 41],
+                      iconAnchor: [12, 41],
+                      popupAnchor: [1, -34],
+                      shadowSize: [41, 41]
+                    })}
+                  >
+                    <Popup>{station.name}</Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
+            </div>
+
+           <div className="route-info">
+  <h3>Rota Bilgisi</h3>
+  <div className="info-grid">
+    <div className="info-item">
+      <label>Araç:</label>
+      <span>{cargoRoute?.vehicle_id || 'N/A'}</span>
+    </div>
+    <div className="info-item">
+      <label>Uzaklık:</label>
+      <span>{cargoRoute?.total_distance_km || '0'} km</span>
+    </div>
+    <div className="info-item">
+      <label>Toplam Ağırlık:</label>
+      <span>{cargoRoute?.total_weight_kg || '0'} kg</span>
+    </div>
+  </div>
+</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

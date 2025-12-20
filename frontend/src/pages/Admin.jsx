@@ -7,6 +7,14 @@ import L from 'leaflet';
 
 const API_URL = 'http://localhost:5000/api';
 
+// ✅ GLOBAL INTERCEPTOR - Token otomatik ekleniyor
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('adminToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 // FitBounds Component
 function FitBoundsComponent({ stations, routePolylines }) {
@@ -272,27 +280,19 @@ function Admin() {
   }, []);
 
   useEffect(() => {
-  if (activeTab === 'dashboard') {
-    console.log('📍 Dashboard açıldı');
-    setAllRoutePolylines([]);
-    setRoutePolylines([]);
-    
-    // ✅ TOKEN KONTROL ET
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      console.log('⚠️ Token yok, giriş yapınız!');
-      setMessage('❌ Lütfen giriş yapınız!');
-      return;
+    if (activeTab === 'dashboard') {
+      console.log('📍 Dashboard açıldı');
+      setAllRoutePolylines([]);
+      setRoutePolylines([]);
+      
+      if (stations.length > 0) {
+        console.log('📍 loadAllRoutes çağrılıyor');
+        loadAllRoutes();
+      } else {
+        console.log('⚠️ Stations yüklenmedi!');
+      }
     }
-    
-    if (stations.length > 0) {
-      console.log('📍 loadAllRoutes çağrılıyor');
-      loadAllRoutes();
-    } else {
-      console.log('⚠️ Stations yüklenmedi!');
-    }
-  }
-}, [activeTab, stations]);
+  }, [activeTab, stations]);
 
   const loadStations = async () => {
     try {
@@ -484,7 +484,7 @@ function Admin() {
   return (
     <div className="admin-container">
       <div className="sidebar">
-        <h2>👤 Admin</h2>
+        <h2> Admin</h2>
         <nav>
           <button
             className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -503,13 +503,13 @@ function Admin() {
             className={`nav-btn ${activeTab === 'station-add' ? 'active' : ''}`}
             onClick={() => setActiveTab('station-add')}
           >
-            📍 İstasyon Ekle
+             İstasyon Ekle
           </button>
           <button
             className={`nav-btn ${activeTab === 'vehicle-rent' ? 'active' : ''}`}
             onClick={() => setActiveTab('vehicle-rent')}
           >
-            🚗 Araç Kirala
+             Araç Kirala
           </button>
           
           <button
@@ -525,22 +525,20 @@ function Admin() {
             Araçlar
           </button>
           <button
-            className={`nav-btn ${activeTab === 'cargo-management' ? 'active' : ''}`}
-            onClick={() => setActiveTab('cargo-management')}
-          >
-            📦 Kargo Yönetimi
-          </button>
-          <a 
-  href="/" 
   className="nav-btn"
-  onClick={(e) => {
-    e.preventDefault();
+  onClick={() => {
     localStorage.clear();
     window.location.href = '/';
   }}
+  style={{
+    marginTop: 'auto',
+    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+    paddingTop: '15px',
+    color: '#ecf0f1'
+  }}
 >
-  🚪 Çıkış
-</a>
+  Çıkış
+</button>
         </nav>
       </div>
 
@@ -553,14 +551,14 @@ function Admin() {
               onClick={calculateRoutes}
               disabled={loading}
             >
-              {loading ? '⏳ Hesaplanıyor...' : '🚀 Rota Planla'}
+              {loading ? '⏳ Hesaplanıyor...' : ' Rota Planla'}
             </button>
             
             <button 
               className="btn btn-info"
               onClick={loadScenarioAnalysis}
             >
-              📊 Senaryo Analizi
+               Senaryo Analizi
             </button>
           </div>
         </div>
@@ -665,7 +663,7 @@ function Admin() {
 
             {scenarioAnalysis && (
               <div style={{ marginTop: '30px', backgroundColor: '#f9f9f9', padding: '20px', borderRadius: '8px' }}>
-                <h3>📈 Senaryo Analizi</h3>
+                <h3> Senaryo Analizi</h3>
                 <table className="table">
                   <tbody>
                     <tr>
@@ -727,7 +725,7 @@ function Admin() {
 
         {activeTab === 'rotalar' && (
           <section className="section">
-            <h2>📋 Detaylı Rota Bilgileri</h2>
+            <h2> Detaylı Rota Bilgileri</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -769,7 +767,7 @@ function Admin() {
 
         {activeTab === 'istasyonlar' && (
           <section className="section">
-            <h2>📍 İstasyonlar</h2>
+            <h2> İstasyonlar</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -792,7 +790,7 @@ function Admin() {
                         className="btn btn-danger"
                         onClick={() => deleteStation(station.id)}
                       >
-                        🗑️ Sil
+                         Sil
                       </button>
                     </td>
                   </tr>
@@ -804,7 +802,7 @@ function Admin() {
 
         {activeTab === 'araclar' && (
           <section className="section">
-            <h2>🚗 Araçlar</h2>
+            <h2> Araçlar</h2>
             <table className="table">
               <thead>
                 <tr>
@@ -827,7 +825,7 @@ function Admin() {
                         className="btn btn-danger"
                         onClick={() => deleteVehicle(vehicle.id)}
                       >
-                        🗑️ Sil
+                         Sil
                       </button>
                     </td>
                   </tr>
@@ -839,7 +837,7 @@ function Admin() {
 
         {activeTab === 'cargo-management' && (
           <section className="section">
-            <h2>📦 Bekleyen Kargolar - Yönetim</h2>
+            <h2> Bekleyen Kargolar - Yönetim</h2>
             
             <div style={{ marginBottom: '20px' }}>
               <button 
@@ -847,7 +845,7 @@ function Admin() {
                 onClick={loadPendingCargos}
                 style={{ marginRight: '10px' }}
               >
-                🔄 Bekleyen Kargolar Yükle
+                 Bekleyen Kargolar Yükle
               </button>
             </div>
 
@@ -895,7 +893,7 @@ function Admin() {
                               className="btn btn-danger"
                               onClick={() => rejectCargo(cargo.id)}
                             >
-                              ❌ Red Et
+                               Red Et
                             </button>
                           )}
                         </td>
@@ -910,7 +908,7 @@ function Admin() {
 
         {activeTab === 'station-add' && (
           <section className="section">
-            <h2>➕ Yeni İstasyon Ekle</h2>
+            <h2> Yeni İstasyon Ekle</h2>
             <form onSubmit={addStation} style={{ maxWidth: '500px' }}>
               <div className="form-group">
                 <label>İstasyon Adı:</label>
@@ -948,7 +946,7 @@ function Admin() {
               </div>
 
               <button type="submit" className="btn btn-success">
-                ➕ İstasyon Ekle
+                 İstasyon Ekle
               </button>
             </form>
           </section>
@@ -956,13 +954,13 @@ function Admin() {
 
         {activeTab === 'vehicle-rent' && (
           <section className="section">
-            <h2>🚗 Araç Kirala</h2>
+            <h2> Araç Kirala</h2>
             
             <div style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
               <h3>Sistem Parametreleri</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="form-group">
-                  <label>⛽ Yakıt Fiyatı (₺/L):</label>
+                  <label> Yakıt Fiyatı (₺/L):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -971,7 +969,7 @@ function Admin() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>🛣️ Km Maliyeti (₺/km):</label>
+                  <label> Km Maliyeti (₺/km):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -980,7 +978,7 @@ function Admin() {
                   />
                 </div>
                 <div className="form-group">
-                  <label>⚖️ Minimum Kargo Ağırlığı (kg):</label>
+                  <label> Minimum Kargo Ağırlığı (kg):</label>
                   <input
                     type="number"
                     step="1"
@@ -1007,7 +1005,7 @@ function Admin() {
                 }}
                 style={{ marginTop: '10px' }}
               >
-                💾 Parametreleri Kaydet
+                 Parametreleri Kaydet
               </button>
             </div>
 
@@ -1045,7 +1043,7 @@ function Admin() {
               </div>
 
               <button type="submit" className="btn btn-success">
-                🚗 Araç Kirala
+                 Araç Kirala
               </button>
             </form>
           </section>

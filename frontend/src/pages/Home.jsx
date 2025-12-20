@@ -6,7 +6,7 @@ function Home() {
   return (
     <div className="home-container">
       <div className="header">
-        <h1>🚚 Kargo İşletme Sistemi</h1>
+        <h1> Kargo İşletme Sistemi</h1>
         <p>Kocaeli Üniversitesi - Bilgisayar Mühendisliği</p>
       </div>
 
