@@ -137,10 +137,10 @@ function User() {
       }
     });
 
-    console.log('Route Response:', response.data); // ← EKLE
+    console.log('Route Response:', response.data);
 
     if (response.data.route) {
-      console.log('Route Data:', response.data.route); // ← EKLE
+      console.log('Route Data for cargo', cargoId, ':', response.data.route);
       setCargoRoute(response.data.route);
       drawRoute(response.data.route);
       setMessage('');
@@ -156,51 +156,57 @@ function User() {
 };
 
   const drawRoute = (route) => {
-    let stations_list = route.stations;
-    
-    if (typeof stations_list === 'string') {
-      try {
-        stations_list = JSON.parse(stations_list);
-      } catch (e) {
-        console.error('JSON parse error:', e);
-        setMessage('Invalid route information');
-        return;
+  console.log('Drawing route with data:', route); // ← DEBUG
+  
+  let stations_list = route.stations;
+  
+  // Eğer string ise parse et
+  if (typeof stations_list === 'string') {
+    try {
+      stations_list = JSON.parse(stations_list);
+    } catch (e) {
+      console.error('JSON parse error:', e);
+      console.log('stations_list raw:', stations_list);
+      return;
+    }
+  }
+
+  // stations_list array değilse, stations yerine stations array'ı kullan
+  if (!Array.isArray(stations_list)) {
+    console.error('Stations is not an array:', stations_list);
+    console.log('Route object keys:', Object.keys(route));
+    return;
+  }
+
+  const coordinates = stations_list
+    .map(stationId => {
+      if (stationId === 13 || stationId === 0) {
+        return [40.8667, 29.85]; // Üniversite
       }
-    }
+      const station = stations.find(s => s.id === stationId);
+      return station 
+        ? [parseFloat(station.latitude), parseFloat(station.longitude)]
+        : null;
+    })
+    .filter(c => c !== null);
 
-    if (!Array.isArray(stations_list)) {
-      console.error('Stations is not an array:', stations_list);
-      setMessage('Station list not found');
-      return;
-    }
+  console.log('Coordinates:', coordinates); // ← DEBUG
 
-    const coordinates = stations_list
-      .map(stationId => {
-        if (stationId === 13) {
-          return [40.8667, 29.85];
-        }
-        const station = stations.find(s => s.id === stationId);
-        return station 
-          ? [parseFloat(station.latitude), parseFloat(station.longitude)]
-          : null;
-      })
-      .filter(c => c !== null);
+  if (coordinates.length === 0) {
+    setMessage('Route coordinates could not be loaded');
+    return;
+  }
 
-    if (coordinates.length === 0) {
-      setMessage('Route coordinates could not be loaded');
-      return;
-    }
-
-    const polyline = {
-      positions: coordinates,
-      color: '#3498db',
-      weight: 3,
-      opacity: 0.7,
-      dashArray: '5, 5'
-    };
-
-    setRoutePolylines([polyline]);
+  const polyline = {
+    positions: coordinates,
+    color: '#3498db',
+    weight: 3,
+    opacity: 0.7,
+    dashArray: '5, 5'
   };
+
+  setRoutePolylines([polyline]);
+};
 
   const handleChange = (e) => {
     const { name, value } = e.target;

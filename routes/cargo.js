@@ -14,6 +14,8 @@ router.get('/my-cargos', verifyToken, getUserCargo);
 router.get('/status/:cargo_id', verifyToken, getCargoStatus);
 
 // GET /api/cargo/route/:cargoId - User'ın kargosunun rotasını getir
+// GET /api/cargo/route/:cargoId - User'ın kargosunun rotasını getir
+// GET /api/cargo/route/:cargoId - User'ın kargosunun rotasını getir
 router.get('/route/:cargoId', verifyToken, async (req, res) => {
   try {
     const { cargoId } = req.params;
@@ -30,52 +32,58 @@ router.get('/route/:cargoId', verifyToken, async (req, res) => {
     }
 
     // Kargo'nun atandığı rotayı bul
-    const [shipment] = await db.query(
+    const shipments = await db.query(
       'SELECT route_id, vehicle_id FROM shipments WHERE cargo_request_id = ?',
       [cargoId]
     );
 
-    if (shipment.length === 0) {
+    // ✅ Array'i düzgün destructure et
+    if (!shipments || shipments.length === 0 || shipments[0].length === 0) {
       return res.json({ message: 'Kargo henüz rotaya atanmadı', route: null });
     }
 
+    const shipment = shipments[0][0]; // ✅ İLK KARGO
+
     // Route'u getir
-    const [route] = await db.query(
+    const routes = await db.query(
       'SELECT * FROM routes WHERE id = ?',
-      [shipment[0].route_id]
+      [shipment.route_id]
     );
 
-    if (route.length === 0) {
+    if (!routes || routes.length === 0 || routes[0].length === 0) {
       return res.json({ message: 'Rota bulunamadı', route: null });
     }
 
-    // Aynı rotadaki tüm istasyonları getir (stations olarak)
-    const [routeStations] = await db.query(
+    const route = routes[0][0]; // ✅ İLK ROUTE
+
+    // Aynı rotadaki tüm istasyonları getir
+    const routeStations = await db.query(
       `SELECT DISTINCT cr.station_id FROM cargo_requests cr
        INNER JOIN shipments s ON cr.id = s.cargo_request_id
        WHERE s.route_id = ?
        ORDER BY cr.station_id`,
-      [shipment[0].route_id]
+      [shipment.route_id]
     );
 
-    // Stations array'ini oluştur
     const stations_array = [
-      ...routeStations.map(r => r.station_id),
+      ...(routeStations[0] || []).map(r => r.station_id),
       13 // Üniversite ekle
     ];
 
+    const routeData = {
+      id: route.id,
+      vehicle_id: route.vehicle_id,
+      total_distance_km: route.total_distance_km,
+      total_weight_kg: route.total_weight_kg,
+      fuel_cost: route.fuel_cost,
+      distance_cost: route.distance_cost,
+      total_cost: route.total_cost,
+      stations: stations_array
+    };
+
     res.json({ 
       success: true, 
-      route: {
-        id: route[0].id,
-        vehicle_id: route[0].vehicle_id,
-        total_distance_km: route[0].total_distance_km,
-        total_weight_kg: route[0].total_weight_kg,
-        fuel_cost: route[0].fuel_cost,
-        distance_cost: route[0].distance_cost,
-        total_cost: route[0].total_cost,
-        stations: stations_array
-      }
+      route: routeData
     });
 
   } catch (error) {
@@ -83,5 +91,4 @@ router.get('/route/:cargoId', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Rota getirilemedi!' });
   }
 });
-
 module.exports = router;
