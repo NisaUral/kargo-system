@@ -440,7 +440,7 @@ selectOptimalStartingStation(availableStations) {
   console.log(`[START-OPT] ✅ Seçilen başlangıç: Station ${bestStation} (skor: ${bestScore.toFixed(2)})`);
   return bestStation;
 }
-  // Ana algoritma
+  // Ana algoritma - ✅ DÜZELTILMIŞ VERSİYON
   solve() {
   const availableStations = Object.keys(this.cargoByStation)
     .map(id => parseInt(id));
@@ -456,6 +456,7 @@ selectOptimalStartingStation(availableStations) {
   console.log(`[SOLVE] Toplam kargo: ${availableStations.length}`);
 
   while (assignedStations.size < availableStations.length) {
+    // ✅ SADECE ATANMAYAN istasyonları al
     const remainingStations = availableStations.filter(s => !assignedStations.has(s));
     
     if (remainingStations.length === 0) {
@@ -463,6 +464,7 @@ selectOptimalStartingStation(availableStations) {
       break;
     }
 
+    // ✅ EĞER TÜM ARAÇLAR BİTTİYSE YENİ KIRALA
     if (vehicleIdx >= vehiclesToUse.length) {
       const newVehicle = {
         id: 100 + newVehiclesRented,
@@ -478,20 +480,23 @@ selectOptimalStartingStation(availableStations) {
     }
 
     const currentVehicle = vehiclesToUse[vehicleIdx];
-    console.log(`\n[SOLVE] 🚗 Araç ${vehicleIdx}: ID=${currentVehicle.id}, Cap=${currentVehicle.capacity_kg}kg, Kalan=${remainingStations.length}`);
+    console.log(`\n[SOLVE] 🚗 Araç ${vehicleIdx} (ID=${currentVehicle.id}): Cap=${currentVehicle.capacity_kg}kg, Kalan=${remainingStations.length}`);
 
     // ✅ OPTIMAL BAŞLANGIÇ NOKTASINI SEÇ
     const startingStation = this.selectOptimalStartingStation(remainingStations);
+    
+    // ✅ KOPYA OLUŞTUR (nearestNeighbor içinde modifiye edilir)
     const stationsForRoute = [...remainingStations];
     
     const route = this.nearestNeighborRoute(
-      startingStation,  // ✅ Optimal başlangıç
-      stationsForRoute,
+      startingStation,
+      stationsForRoute,  // ✅ SADECE KALAN istasyonlar
       currentVehicle
     );
 
     const usedStations = route.stations.filter(s => s !== 0);
     
+    // ✅ KULLANILAN istasyonları assignedStations'a ekle
     for (const station of usedStations) {
       assignedStations.add(station);
     }
@@ -521,25 +526,8 @@ selectOptimalStartingStation(availableStations) {
 
     totalCost += totalRouteCost;
 
-    const nextRemaining = availableStations.filter(s => !assignedStations.has(s));
-    
-    if (nextRemaining.length > 0) {
-      const testStations = [...nextRemaining];
-      const testRoute = this.nearestNeighborRoute(
-        testStations[0],
-        [...testStations],
-        currentVehicle
-      );
-      
-      const testUsed = testRoute.stations.filter(s => s !== 0);
-      
-      if (testUsed.length === 0) {
-        console.log(`[SOLVE] 💪 Araç ${currentVehicle.id} dolu, sonraki araca geçiliyor\n`);
-        vehicleIdx++;
-      } else {
-        console.log(`[SOLVE] 📦 Araç ${currentVehicle.id} devam edebiliyor\n`);
-      }
-    }
+    // ✅ SONRAKI ARAÇLARA GEÇ
+    vehicleIdx++;
   }
 
   // ✅ AŞAMA 2: SAVINGS OPTIMIZATION UYGULA
