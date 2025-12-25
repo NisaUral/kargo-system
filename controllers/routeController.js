@@ -452,6 +452,9 @@ const saveParameters = async (req, res) => {
 
 const analyzeScenario = async (req, res) => {
   try {
+    // ✅ VEHICLES QUERY'SİNİ BAŞA AL
+    const [vehicles] = await db.query('SELECT id, capacity_kg FROM vehicles');
+    
     // Tüm rotaları getir
     const [routes] = await db.query(`
       SELECT 
@@ -492,6 +495,11 @@ const analyzeScenario = async (req, res) => {
       analysis.totalScenario.totalCost += parseFloat(route.total_cost);
       
       const stations_array = route.stations.split(',').map(s => parseInt(s));
+      
+      // ✅ CAPACITY'İ BURADAN AL
+      const vehicle = vehicles.find(v => v.id === route.vehicle_id);
+      const capacity = vehicle?.capacity_kg || 500;
+      
       analysis.vehicleDetails.push({
         vehicleId: route.vehicle_id,
         stations: stations_array.length,
@@ -500,7 +508,7 @@ const analyzeScenario = async (req, res) => {
         cost: route.total_cost,
         cargoCount: route.cargo_count,
         costPerKg: (parseFloat(route.total_cost) / route.total_weight_kg).toFixed(2),
-        utilization: ((route.total_weight_kg / 500) * 100).toFixed(1) + '%'
+        utilization: ((route.total_weight_kg / capacity) * 100).toFixed(1) + '%'  // ✅ DOĞRU
       });
 
       // İstasyon dağılımı
