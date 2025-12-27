@@ -7,7 +7,7 @@ import L from 'leaflet';
 
 const API_URL = 'http://localhost:5000/api';
 
-// ✅ GLOBAL INTERCEPTOR - Token otomatik ekleniyor
+//  GLOBAL INTERCEPTOR - Token otomatik ekleniyor
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('adminToken');
   if (token) {
@@ -71,7 +71,7 @@ function RouteLines({ routePolylines, stations }) {
   
   useEffect(() => {
     if (routePolylines && routePolylines.length > 0 && map) {
-      console.log(`🎨 Gerçek rotalar çiziliyor: ${routePolylines.length} rota`);
+      console.log(` Gerçek rotalar çiziliyor: ${routePolylines.length} rota`);
       
       // Eski çizgileri sil
       map.eachLayer(layer => {
@@ -82,7 +82,7 @@ function RouteLines({ routePolylines, stations }) {
       
       routePolylines.forEach((route, idx) => {
         if (route.stationIds && route.stationIds.length >= 2) {
-          console.log(`📍 Rota ${idx} için gerçek yol isteniyor:`, route.stationIds);
+          console.log(` Rota ${idx} için gerçek yol isteniyor:`, route.stationIds);
           
           // İstasyonları koordinatlara çevir
           const coordinates = route.stationIds
@@ -114,7 +114,7 @@ async function fetchRealRoute(coordinates, color, routeIdx, map) {
     const coords = coordinates.map(c => `${c.lng},${c.lat}`).join(';');
     const url = `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson`;
 
-    console.log(`📡 OSRM'den rota isteniyor: ${url}`);
+    console.log(` OSRM'den rota isteniyor: ${url}`);
     
     const response = await fetch(url);
     const data = await response.json();
@@ -133,9 +133,9 @@ async function fetchRealRoute(coordinates, color, routeIdx, map) {
         lineJoin: 'round'
       }).addTo(map);
 
-      console.log(`✅ Rota ${routeIdx} gerçek yollarla çizildi (${(route.distance / 1000).toFixed(2)} km)`);
+      console.log(` Rota ${routeIdx} gerçek yollarla çizildi (${(route.distance / 1000).toFixed(2)} km)`);
     } else {
-      console.warn(`⚠️ Rota ${routeIdx} bulunamadı, fallback çizgi kullanıyorum`);
+      console.warn(` Rota ${routeIdx} bulunamadı, fallback çizgi kullanıyorum`);
       const fallbackCoords = coordinates.map(c => [c.lat, c.lng]);
       L.polyline(fallbackCoords, {
         color: color || '#3388ff',
@@ -145,7 +145,7 @@ async function fetchRealRoute(coordinates, color, routeIdx, map) {
       }).addTo(map);
     }
   } catch (error) {
-    console.error(`❌ Rota ${routeIdx} hatası:`, error);
+    console.error(` Rota ${routeIdx} hatası:`, error);
     const fallbackCoords = coordinates.map(c => [c.lat, c.lng]);
     L.polyline(fallbackCoords, {
       color: color || '#3388ff',
@@ -199,12 +199,12 @@ function Admin() {
         newStation
       );
 
-      setMessage('✅ İstasyon başarıyla eklendi!');
+      setMessage(' İstasyon başarıyla eklendi!');
       setNewStation({ name: '', latitude: '', longitude: '' });
       loadStations();
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
-      setMessage('❌ ' + (error.response?.data?.error || 'İstasyon eklenemedi!'));
+      setMessage(' ' + (error.response?.data?.error || 'İstasyon eklenemedi!'));
     }
   };
 
@@ -212,9 +212,9 @@ function Admin() {
     try {
       const response = await axios.get(`${API_URL}/routes/scenario-analysis`);
       setScenarioAnalysis(response.data.analysis);
-      setMessage('✅ Senaryo analizi yüklendi!');
+      setMessage(' Senaryo analizi yüklendi!');
     } catch (error) {
-      setMessage('❌ Analiz yüklenemedi!');
+      setMessage(' Analiz yüklenemedi!');
     }
   };
 
@@ -235,12 +235,12 @@ function Admin() {
         }
       );
 
-      setMessage('✅ Araç başarıyla kiralandı!');
+      setMessage(' Araç başarıyla kiralandı!');
       setNewVehicle({ name: '', capacity_kg: '', rental_cost: '' });
       loadVehicles();
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
-      setMessage('❌ ' + (error.response?.data?.error || 'Araç kiralama başarısız!'));
+      setMessage(' ' + (error.response?.data?.error || 'Araç kiralama başarısız!'));
     }
   };
 
@@ -251,11 +251,11 @@ function Admin() {
 
     try {
       await axios.delete(`${API_URL}/routes/stations/${stationId}`);
-      setMessage('✅ İstasyon başarıyla silindi!');
+      setMessage(' İstasyon başarıyla silindi!');
       loadStations();
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
-      setMessage('❌ ' + (error.response?.data?.error || 'İstasyon silinemedi!'));
+      setMessage(' ' + (error.response?.data?.error || 'İstasyon silinemedi!'));
     }
   };
 
@@ -266,11 +266,11 @@ function Admin() {
 
     try {
       await axios.delete(`${API_URL}/routes/vehicles/${vehicleId}`);
-      setMessage('✅ Araç başarıyla silindi!');
+      setMessage(' Araç başarıyla silindi!');
       loadVehicles();
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
-      setMessage('❌ ' + (error.response?.data?.error || 'Araç silinemedi!'));
+      setMessage(' ' + (error.response?.data?.error || 'Araç silinemedi!'));
     }
   };
 
@@ -281,15 +281,15 @@ function Admin() {
 
   useEffect(() => {
     if (activeTab === 'dashboard') {
-      console.log('📍 Dashboard açıldı');
+      console.log(' Dashboard açıldı');
       setAllRoutePolylines([]);
       setRoutePolylines([]);
       
       if (stations.length > 0) {
-        console.log('📍 loadAllRoutes çağrılıyor');
+        console.log(' loadAllRoutes çağrılıyor');
         loadAllRoutes();
       } else {
-        console.log('⚠️ Stations yüklenmedi!');
+        console.log(' Stations yüklenmedi!');
       }
     }
   }, [activeTab, stations]);
@@ -313,10 +313,10 @@ function Admin() {
   };
 
   const drawAllRoutesWithData = (routesToDraw) => {
-    console.log('🎨 drawAllRoutesWithData içinde, routes:', routesToDraw);
+    console.log(' drawAllRoutesWithData içinde, routes:', routesToDraw);
     
     if (!routesToDraw || routesToDraw.length === 0) {
-      console.log('⚠️ Routes boş!');
+      console.log(' Routes boş!');
       return;
     }
 
@@ -346,9 +346,9 @@ function Admin() {
     try {
       const response = await axios.get(`${API_URL}/routes/pending-cargos`);
       setPendingCargos(response.data.data);
-      setMessage('✅ Bekleyen kargolar yüklendi!');
+      setMessage(' Bekleyen kargolar yüklendi!');
     } catch (error) {
-      setMessage('❌ Kargolar yüklenemedi!');
+      setMessage(' Kargolar yüklenemedi!');
       console.error(error);
     }
   };
@@ -363,20 +363,22 @@ function Admin() {
         `${API_URL}/routes/cargo-requests/${cargoId}/reject`,
         { reason: 'Admin tarafından reddedildi' }
       );
-      setMessage('✅ Kargo başarıyla reddedildi!');
+      setMessage(' Kargo başarıyla reddedildi!');
       loadPendingCargos();
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
-      setMessage('❌ Kargo reddedilemedi!');
+      setMessage(' Kargo reddedilemedi!');
     }
   };
 
+  
+
   const loadAllRoutes = async () => {
     try {
-      console.log('📍 loadAllRoutes başlıyor...');
+      console.log(' loadAllRoutes başlıyor...');
       const response = await axios.get(`${API_URL}/routes/all`);
       
-      console.log('✅ Routes geldi:', response.data.routes);
+      console.log(' Routes geldi:', response.data.routes);
       setAllRoutes(response.data.routes);
       drawAllRoutesWithData(response.data.routes);
       
@@ -384,15 +386,39 @@ function Admin() {
       console.error('Error loading all routes:', error);
     }
   };
+  const endDay = async () => {
+    if (!window.confirm(' GÜN BİTİRMEK - Tüm kargolar, rotalar ve kiralanan araçlar silinecektir! Emin misiniz?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const response = await axios.post(
+        `${API_URL}/routes/end-day`
+      );
+      
+      setMessage(' Gün başarıyla bitirildi! Tüm veriler sıfırlandı.');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+      
+    } catch (error) {
+      setMessage(' Gün bitirme işlemi başarısız: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const calculateRoutes = async () => {
     setLoading(true);
     try {
-      console.log('🚀 Otomatik mod - Rota hesaplanıyor...');
+      console.log(' Otomatik mod - Rota hesaplanıyor...');
       
       const token = localStorage.getItem('adminToken');
       if (!token) {
-        setMessage('❌ Admin token bulunamadı! Lütfen giriş yapınız.');
+        setMessage(' Admin token bulunamadı! Lütfen giriş yapınız.');
         setLoading(false);
         return;
       }
@@ -417,7 +443,7 @@ function Admin() {
         reason = `Toplam ağırlık ${totalWeight}kg > 3000kg (Sınırsız araç)`;
       }
 
-      console.log(`📊 Otomatik analiz: ${reason}`);
+      console.log(` Otomatik analiz: ${reason}`);
 
       const autoAnalysisData = {
         selectedType,
@@ -432,7 +458,7 @@ function Admin() {
         { problem_type: selectedType }
       );
 
-      console.log('✅ Routes calculated:', response.data);
+      console.log(' Routes calculated:', response.data);
       setRoutes(response.data.routes);
       setStats({
         totalCost: parseFloat(response.data.totalCost),
@@ -450,24 +476,24 @@ function Admin() {
       if (response.data.suggestedRejectedCargo && response.data.suggestedRejectedCargo.length > 0) {
         setRejectedCargo(response.data.suggestedRejectedCargo);
         setMessage(
-          `📊 ${reason}\n` +
-          `⚠️ ${response.data.suggestedRejectedCargo.length} istasyon red EDİLEBİLİR (admin onayı gerekli)! ` +
+          ` ${reason}\n` +
+          ` ${response.data.suggestedRejectedCargo.length} istasyon red EDİLEBİLİR (admin onayı gerekli)! ` +
           `Mevcut kabul: ${response.data.acceptanceRate}%`
         );
       } else {
         setRejectedCargo([]);
-        setMessage(`📊 ${reason}\n✅ Tüm kargolar başarıyla atandı!`);
+        setMessage(` ${reason}\n Tüm kargolar başarıyla atandı!`);
       }
 
       if (response.data.rejectedCargoByWeight && response.data.rejectedCargoByWeight.length > 0) {
-        const lightCargoMsg = `🔔 ${response.data.rejectedCargoByWeight.length} istasyon minimum ${response.data.minCargoWeight}kg altında (toplam: ${response.data.rejectedCargoByWeight.reduce((s, c) => s + c.weight, 0)}kg)`;
+        const lightCargoMsg = ` ${response.data.rejectedCargoByWeight.length} istasyon minimum ${response.data.minCargoWeight}kg altında (toplam: ${response.data.rejectedCargoByWeight.reduce((s, c) => s + c.weight, 0)}kg)`;
         
         setMessage(
-          `📊 ${reason}\n` +
+          ` ${reason}\n` +
           lightCargoMsg + `\n` +
           (response.data.suggestedRejectedCargo?.length > 0 
-            ? `⚠️ ${response.data.suggestedRejectedCargo.length} istasyon kapasite yetersizliği` 
-            : `✅ Tüm uygun kargolar atandı!`)
+            ? ` ${response.data.suggestedRejectedCargo.length} istasyon kapasite yetersizliği` 
+            : ` Tüm uygun kargolar atandı!`)
         );
       }
 
@@ -475,7 +501,7 @@ function Admin() {
 
     } catch (error) {
       console.error('Error calculating routes:', error);
-      setMessage('❌ Rota hesaplanırken hata oluştu: ' + (error.response?.data?.error || error.message));
+      setMessage(' Rota hesaplanırken hata oluştu: ' + (error.response?.data?.error || error.message));
     } finally {
       setLoading(false);
     }
@@ -525,19 +551,32 @@ function Admin() {
             Araçlar
           </button>
           <button
+            className={`nav-btn ${activeTab === 'cargo-management' ? 'active' : ''}`}
+            onClick={() => setActiveTab('cargo-management')}
+          >
+             Kargo Yönetimi
+          </button>
+         <button
   className="nav-btn"
   onClick={() => {
-    localStorage.clear();
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
     window.location.href = '/';
   }}
   style={{
     marginTop: 'auto',
     borderTop: '1px solid rgba(255, 255, 255, 0.1)',
     paddingTop: '15px',
-    color: '#ecf0f1'
+    cursor: 'pointer',
+    background: 'none',
+    border: 'none',
+    color: '#ecf0f1',
+    width: '100%',
+    textAlign: 'left',
+    padding: '15px'
   }}
 >
-  Çıkış
+   Çıkış
 </button>
         </nav>
       </div>
@@ -551,7 +590,7 @@ function Admin() {
               onClick={calculateRoutes}
               disabled={loading}
             >
-              {loading ? '⏳ Hesaplanıyor...' : ' Rota Planla'}
+              {loading ? ' Hesaplanıyor...' : ' Rota Planla'}
             </button>
             
             <button 
@@ -560,6 +599,14 @@ function Admin() {
             >
                Senaryo Analizi
             </button>
+            <button 
+              className="btn btn-danger"
+               onClick={endDay}
+              disabled={loading}
+              style={{ marginLeft: 'auto' }}
+              >
+               Günü Bitir
+             </button>
           </div>
         </div>
 
@@ -634,7 +681,6 @@ function Admin() {
               <thead>
                 <tr>
                   <th>Araç</th>
-                  <th>Kullanıcı</th>
                   <th>İstasyonlar</th>
                   <th>Mesafe (km)</th>
                   <th>Ağırlık (kg)</th>
@@ -644,17 +690,24 @@ function Admin() {
               <tbody>
                 {allRoutes.length === 0 ? (
                   <tr>
-                    <td colSpan="6" style={{ textAlign: 'center' }}>Rota yok</td>
+                    <td colSpan="5" style={{ textAlign: 'center' }}>Rota yok</td>
                   </tr>
                 ) : (
                   allRoutes.map((route, idx) => (
                     <tr key={idx}>
-                      <td>{route.vehicleId}</td>
-                      <td>{route.users.join(', ')}</td>
-                      <td>{route.stations.length}</td>
-                      <td>{route.totalDistance}</td>
+                      <td>Araç {route.vehicleId}</td>
+                      <td>
+                        {route.stations
+                          .filter(s => s !== 0)
+                          .map(stationId => {
+                            const station = stations.find(s => s.id === stationId);
+                            return station ? station.name : `S${stationId}`;
+                          })
+                          .join(', ')}
+                      </td>
+                      <td>{parseFloat(route.totalDistance).toFixed(2)}</td>
                       <td>{route.totalWeight}</td>
-                      <td>₺ {route.totalCost}</td>
+                      <td>₺ {parseFloat(route.totalCost).toFixed(2)}</td>
                     </tr>
                   ))
                 )}
@@ -693,7 +746,7 @@ function Admin() {
                   </tbody>
                 </table>
 
-                <h4 style={{ marginTop: '20px' }}>🚗 Araç Detayları</h4>
+                <h4 style={{ marginTop: '20px' }}> Araç Detayları</h4>
                 <table className="table">
                   <thead>
                     <tr>
@@ -767,7 +820,7 @@ function Admin() {
 
         {activeTab === 'istasyonlar' && (
           <section className="section">
-            <h2> İstasyonlar</h2>
+            <h2>📍 İstasyonlar</h2>
             <table className="table">
               <thead>
                 <tr>

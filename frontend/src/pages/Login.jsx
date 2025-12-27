@@ -47,7 +47,7 @@ function Login() {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed');
+      setError(err.response?.data?.error || 'Giriş Başarısız');
     } finally {
       setLoading(false);
     }
@@ -58,17 +58,17 @@ function Login() {
     setError('');
 
     if (!registerData.name || !registerData.email || !registerData.password) {
-      setError('All fields are required');
+      setError('Tüm alanları doldurunuz');
       return;
     }
 
     if (registerData.password !== registerData.confirmPassword) {
-      setError('Passwords do not match');
+      setError('Şifreler eşleşmiyor');
       return;
     }
 
     if (registerData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError('Şifre en az 6 haneli olmalı');
       return;
     }
 
@@ -96,7 +96,7 @@ function Login() {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed');
+      setError(err.response?.data?.error || 'Kayıt başarısız');
     } finally {
       setLoading(false);
     }

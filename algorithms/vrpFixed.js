@@ -110,7 +110,7 @@ class FixedVehicleVRP {
 
     route.push(0);
 
-    // ✅ REJECT MEKANİZMASI KALDIRILD - SADECE KALAN İSTASYONLARI DÖNDÜR
+    
     // Kalan istasyonlar zaten availableStations'ta kalıyor, solve() içinde başka araca atanacak
 
     return {
@@ -170,7 +170,7 @@ class FixedVehicleVRP {
     return bestStation;
   }
 
-  // ✅ DÜZELTILMIŞ SOLVE - KALAN KARGOLARI ATANMAYAN OLARAK TUTAR
+ 
   solve() {
     this.rejectedCargo = [];
     const availableStations = Object.keys(this.cargoByStation)
@@ -186,7 +186,7 @@ class FixedVehicleVRP {
     for (let vehicleIdx = 0; vehicleIdx < this.vehicles.length; vehicleIdx++) {
       const currentVehicle = this.vehicles[vehicleIdx];
       
-      // ✅ SADECE ATANMAYAN istasyonları al
+      //  SADECE ATANMAYAN istasyonları al
       const remainingStations = availableStations.filter(s => !allRoutes.some(r => r.stations.includes(s)));
 
       console.log(`\n[FIXED] 🚗 Araç ${vehicleIdx + 1}: Cap=${currentVehicle.capacity_kg}kg, Kalan=${remainingStations.length}`);
@@ -203,18 +203,18 @@ class FixedVehicleVRP {
         continue;
       }
       
-      // ✅ KOPYA OLUŞTUR
+     
       const stationsForRoute = [...remainingStations];
       
       const route = this.nearestNeighborRoute(
         startingStation,
-        stationsForRoute,  // ✅ SADECE KALAN istasyonlar
+        stationsForRoute,  
         currentVehicle
       );
 
       const usedStations = route.stations.filter(s => s !== 0);
 
-      console.log(`[FIXED] ✅ Bu rota: ${route.stations.join('->')}, Weight=${route.totalWeight}kg, Used=${usedStations.length}`);
+      console.log(`[FIXED]  Bu rota: ${route.stations.join('->')}, Weight=${route.totalWeight}kg, Used=${usedStations.length}`);
 
       const fuelCost = route.totalDistance * this.costs.fuel_price_per_liter;
       const distanceCost = route.totalDistance * this.costs.km_cost;
@@ -239,25 +239,25 @@ class FixedVehicleVRP {
       acceptedWeight += route.totalWeight;
     }
 
-    // ✅ KALAN KARGOLARI REJECT ETME - SADECE RAPOR ET
+    //  KALAN KARGOLARI REJECT ETME - SADECE RAPOR ET
     const unassignedStations = availableStations.filter(s => !allRoutes.some(r => r.stations.includes(s)));
     
     if (unassignedStations.length > 0) {
-      console.log(`\n[FIXED] ⚠️ ${unassignedStations.length} istasyon atanmadı (başka araçla atanacak)`);
+      console.log(`\n[FIXED]  ${unassignedStations.length} istasyon atanmadı (başka araçla atanacak)`);
       unassignedStations.forEach(stationId => {
         console.log(`[FIXED] - Station ${stationId}: ${this.cargoByStation[stationId]?.totalWeight}kg`);
       });
     }
 
-    console.log(`\n[FIXED] ✅ Kabul edilen: ${acceptedWeight}kg`);
-    console.log(`[FIXED] ⏳ Atanmayan: ${unassignedStations.reduce((sum, s) => sum + (this.cargoByStation[s]?.totalWeight || 0), 0)}kg`);
+    console.log(`\n[FIXED]  Kabul edilen: ${acceptedWeight}kg`);
+    console.log(`[FIXED]  Atanmayan: ${unassignedStations.reduce((sum, s) => sum + (this.cargoByStation[s]?.totalWeight || 0), 0)}kg`);
 
     return {
       routes: allRoutes,
       totalCost: totalCost.toFixed(2),
       vehiclesUsed: allRoutes.length,
       newVehiclesRented: 0,
-      rejectedCargo: [],  // ✅ BOŞBIRAKALIM
+      rejectedCargo: [],  
       acceptedWeight,
       rejectedWeight: 0,
       acceptanceRate: 100,

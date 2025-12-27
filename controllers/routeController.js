@@ -78,16 +78,61 @@ const calculateRoutes = async (req, res) => {
     let vehicleCount = 3;
 
     if (problem_type === 'unlimited') {
+      console.log('[CALC]  UNLIMITED mode');
       const vrp = new UnlimitedVehicleVRP(stations, vehicles, cargoByStation, costs);
       result = vrp.solve();
     } else if (problem_type.startsWith('fixed-')) {
       vehicleCount = parseInt(problem_type.split('-')[1]);
+      console.log(`[CALC]  FIXED mode - ${vehicleCount} araç seçildi`);
+      
       const selectedVehicles = vehicles.slice(0, vehicleCount);
       
       const vrp = new FixedVehicleVRP(selectedVehicles, stations, cargoByStation, costs);
-      result = vrp.solve();
+      const fixedResult = vrp.solve();
       
-      console.log(`[FIXED] ${vehicleCount} araç ile optimize edildi`);
+      console.log(`[CALC]  Fixed hesaplandı: ${fixedResult.routes.length} rota`);
+      
+      //  Kalan kargolar varsa UnlimitedVRP'ye gönder
+      const allStations = Object.keys(cargoByStation).map(id => parseInt(id));
+      const assignedStations = [];
+      fixedResult.routes.forEach(route => {
+        route.stations.forEach(stationId => {
+          if (stationId !== 0 && !assignedStations.includes(stationId)) {
+            assignedStations.push(stationId);
+          }
+        });
+      });
+      
+      const unassignedStations = allStations.filter(s => !assignedStations.includes(s));
+      
+      if (unassignedStations.length > 0) {
+        console.log(`[CALC]  ${unassignedStations.length} istasyon kaldı, UnlimitedVRP'ye gönderiliyor...`);
+        
+        const remainingCargo = {};
+        unassignedStations.forEach(stationId => {
+          remainingCargo[stationId] = cargoByStation[stationId];
+        });
+        
+        const unlimitedVrp = new UnlimitedVehicleVRP(stations, vehicles, remainingCargo, costs);
+        const unlimitedResult = unlimitedVrp.solve();
+        
+        console.log(`[CALC]  Unlimited hesaplandı: ${unlimitedResult.routes.length} rota, ${unlimitedResult.newVehiclesRented} kiralandı`);
+        
+        result = {
+          routes: [...fixedResult.routes, ...unlimitedResult.routes],
+          totalCost: (parseFloat(fixedResult.totalCost) + parseFloat(unlimitedResult.totalCost)).toFixed(2),
+          vehiclesUsed: fixedResult.vehiclesUsed + unlimitedResult.vehiclesUsed,
+          newVehiclesRented: unlimitedResult.newVehiclesRented,
+          rentalVehicles: unlimitedResult.rentalVehicles || [],  // ✅ RENTAL VEHICLES AKTAR
+          rejectedCargo: unlimitedResult.rejectedCargo,
+          acceptedWeight: fixedResult.acceptedWeight + unlimitedResult.acceptedWeight,
+          rejectedWeight: unlimitedResult.rejectedWeight,
+          acceptanceRate: 100,
+          summary: unlimitedResult.summary
+        };
+      } else {
+        result = fixedResult;
+      }
     }
 
     if (result.rejectedCargo && result.rejectedCargo.length > 0) {
@@ -101,16 +146,44 @@ const calculateRoutes = async (req, res) => {
       }
     }
 
+    //  Kiralandı araçları kaydet ve ID mapping oluştur
+    const vehicleIdMap = {}; // Eski ID (100+) -> Yeni ID mapping
+    
+    //  VRP'den gelen kiralanan araçları kullan
+    const rentalVehicles = result.rentalVehicles || [];
+    
+    for (const rentalVehicle of rentalVehicles) {
+      const [vehicleResult] = await db.query(
+        `INSERT INTO vehicles (name, capacity_kg, rental_cost, status) 
+         VALUES (?, ?, ?, 'active')`,
+        [
+          rentalVehicle.name,
+          rentalVehicle.capacity_kg,  // ✅ GERÇEK KAPASİTE (kalan kargo kadar veya dinamik)
+          rentalVehicle.rental_cost
+        ]
+      );
+      
+      const newVehicleId = vehicleResult.insertId;
+      const oldVehicleId = rentalVehicle.id; // VRP'de 100, 101, 102...
+      vehicleIdMap[oldVehicleId] = newVehicleId;
+      
+      console.log(`✅ Kiralandı araç kaydedildi: ${rentalVehicle.name} - ${rentalVehicle.capacity_kg}kg kapasite (Old ID=${oldVehicleId} -> New ID=${newVehicleId})`);
+    }
+
+    //  Rotaları INSERT et
     for (const route of result.routes) {
       const stationsWithUniversity = route.stations.includes(0) 
         ? route.stations 
         : [...route.stations, 0];
       
+      //  Map'den gerçek vehicle ID'sini al
+      const realVehicleId = vehicleIdMap[route.vehicleId] || route.vehicleId;
+      
       const [routeResult] = await db.query(
         `INSERT INTO routes (vehicle_id, total_distance_km, total_weight_kg, fuel_cost, distance_cost, total_cost, stations) 
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
-          route.vehicleId,
+          realVehicleId,  //  GERÇEK VEHICLE ID
           parseFloat(route.totalDistance),
           route.totalWeight,
           parseFloat(route.fuelCost),
@@ -135,7 +208,7 @@ const calculateRoutes = async (req, res) => {
           await db.query(
             `INSERT INTO shipments (cargo_request_id, route_id, vehicle_id, assigned_at)
              VALUES (?, ?, ?, NOW())`,
-            [cargo.id, routeId, route.vehicleId]
+            [cargo.id, routeId, realVehicleId]  //  GERÇEK VEHICLE ID
           );
 
           await db.query(
@@ -146,6 +219,10 @@ const calculateRoutes = async (req, res) => {
       }
     }
 
+    
+
+
+
     res.json({
       success: true,
       problem_type: problem_type || 'fixed-3',
@@ -154,6 +231,7 @@ const calculateRoutes = async (req, res) => {
       totalCost: result.totalCost,
       vehiclesUsed: result.vehiclesUsed,
       newVehiclesRented: result.newVehiclesRented,
+      rentalVehicles: rentalVehicles,  //  FRONTEND'E GÖNDERİLdi
       suggestedRejectedCargo: result.rejectedCargo || [],
       rejectedCargoByWeight: tooLightCargos,
       acceptedWeight: result.acceptedWeight,
@@ -168,6 +246,8 @@ const calculateRoutes = async (req, res) => {
     res.status(500).json({ error: 'Rota hesaplanamadı!' });
   }
 };
+
+
 // Tüm rotaları getir (Admin için)
 const getAllRoutes = async (req, res) => {
   try {
@@ -181,13 +261,13 @@ const getAllRoutes = async (req, res) => {
     console.log('User role:', user[0]?.role);
     
     if (!user || !user[0] || user[0].role !== 'admin') {
-      console.log('❌ Admin değil! Role:', user[0]?.role);
+      console.log(' Admin değil! Role:', user[0]?.role);
       return res.status(403).json({ error: 'Sadece admin erişebilir!' });
     }
 
-    console.log('✅ Admin kontrolü geçildi');
+    console.log(' Admin kontrolü geçildi');
     
-    // ✅ SQL QUERY DÜZELT
+    //  SQL QUERY DÜZELT
     const [routes] = await db.query(`
       SELECT 
         r.id,
@@ -217,7 +297,7 @@ const getAllRoutes = async (req, res) => {
       users: route.users ? route.users.split(',') : []
     }));
 
-    console.log('✅ Routes getirme başarılı:', formattedRoutes.length, 'rota');
+    console.log(' Routes getirme başarılı:', formattedRoutes.length, 'rota');
 
     res.json({
       success: true,
@@ -315,10 +395,10 @@ const getMyRoutes = async (req, res) => {
 };
 
 // İstasyon ekle
-// İstasyon ekle
+
 const addStation = async (req, res) => {
   try {
-    // ✅ Admin kontrolü ekle
+    //  Admin kontrolü ekle
     const [user] = await db.query('SELECT role FROM users WHERE id = ?', [req.userId]);
     
     if (user[0]?.role !== 'admin') {
@@ -350,7 +430,7 @@ const addStation = async (req, res) => {
 // Araç kirala
 const rentVehicle = async (req, res) => {
   try {
-    // ✅ Admin kontrolü ekle
+    // Admin kontrolü ekle
     const [user] = await db.query('SELECT role FROM users WHERE id = ?', [req.userId]);
     
     if (user[0]?.role !== 'admin') {
@@ -452,7 +532,7 @@ const saveParameters = async (req, res) => {
 
 const analyzeScenario = async (req, res) => {
   try {
-    // ✅ VEHICLES QUERY'SİNİ BAŞA AL
+    //  VEHICLES QUERY'SİNİ BAŞA AL
     const [vehicles] = await db.query('SELECT id, capacity_kg FROM vehicles');
     
     // Tüm rotaları getir
@@ -496,7 +576,7 @@ const analyzeScenario = async (req, res) => {
       
       const stations_array = route.stations.split(',').map(s => parseInt(s));
       
-      // ✅ CAPACITY'İ BURADAN AL
+      //  CAPACITY'İ BURADAN AL
       const vehicle = vehicles.find(v => v.id === route.vehicle_id);
       const capacity = vehicle?.capacity_kg || 500;
       
@@ -604,7 +684,43 @@ const rejectCargo = async (req, res) => {
   }
 };
 
-module.exports = { calculateRoutes, getAllRoutes, getMyRoutes, addStation, rentVehicle, deleteStation, deleteVehicle, saveParameters, analyzeScenario, getPendingCargos, rejectCargo };
+const endDay = async (req, res) => {
+  try {
+    const [user] = await db.query('SELECT role FROM users WHERE id = ?', [req.userId]);
+    
+    if (user[0]?.role !== 'admin') {
+      return res.status(403).json({ error: 'Sadece admin erişebilir!' });
+    }
+
+    //  SIRASINI ÖNEMLI - FOREIGN KEY'LER NEDENIYLE
+    // 1. Shipments'i sil (cargo_requests'i referans alıyor)
+    await db.query('DELETE FROM shipments');
+
+    // 2. Routes'u sil (vehicle_id referans alıyor)
+    await db.query('DELETE FROM routes');
+
+    // 3. Cargo requests'i sil
+    await db.query('DELETE FROM cargo_requests');
+
+    // 4. Kiralanan araçları sil (ID > 3)
+    await db.query('DELETE FROM vehicles WHERE id > 3');
+
+    console.log('🏁 Gün bitirildi - Tüm veriler sıfırlandı!');
+
+    res.json({
+      success: true,
+      message: 'Gün başarıyla bitirildi! Tüm veriler sıfırlandı.'
+    });
+
+  } catch (error) {
+    console.error('End day error:', error);
+    res.status(500).json({ error: 'Gün bitirme işlemi başarısız!' });
+  }
+};
+
+
+
+module.exports = { calculateRoutes, getAllRoutes, getMyRoutes, addStation, rentVehicle, deleteStation, deleteVehicle, saveParameters, analyzeScenario, getPendingCargos, rejectCargo,endDay};
 
 
 

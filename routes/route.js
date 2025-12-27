@@ -11,17 +11,19 @@ const {
   deleteStation,  // ✅ EKLE
   deleteVehicle,
   saveParameters,
-  analyzeScenario
+  analyzeScenario,
+  endDay
 } = require('../controllers/routeController');
 const router = express.Router();
 
 // Routes
 router.post('/calculate', verifyToken, calculateRoutes);
+router.post('/end-day', verifyToken, endDay);
 router.get('/all', verifyToken, getAllRoutes);
 router.get('/my-routes', verifyToken, getMyRoutes);
 router.get('/scenario-analysis', verifyToken, analyzeScenario);
 
-// ✅ PATH'LERİ DÜZELT - /api/routes/... olmayacak
+//  PATH'LERİ DÜZELT - /api/routes/... olmayacak
 router.post('/add-station', verifyToken, addStation);
 router.post('/rent-vehicle', verifyToken, rentVehicle);
 router.delete('/stations/:stationId', verifyToken, deleteStation);
@@ -29,4 +31,5 @@ router.delete('/vehicles/:vehicleId', verifyToken, deleteVehicle);
 router.post('/parameters', verifyToken, saveParameters);
 router.get('/pending-cargos', verifyToken, getPendingCargos);
 router.post('/cargo-requests/:cargoId/reject', verifyToken, rejectCargo);
+
 module.exports = router;

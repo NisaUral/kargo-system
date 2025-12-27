@@ -25,7 +25,7 @@ function FitBoundsComponent({ stations }) {
 }
 
 // Route Lines Component
-// Route Lines Component - GERÇEKİ ROTA ÇİZİMİ
+
 function RouteLines({ routePolylines, stations }) {
   const map = useMap();
   
@@ -145,7 +145,7 @@ function User() {
       drawRoute(response.data.route);
       setMessage('');
     } else {
-      setMessage('Shipment not assigned to a route yet');
+      setMessage('Kargolar henüz bir rotaya atanmadı!');
       setCargoRoute(null);
       setRoutePolylines([]);
     }
@@ -237,7 +237,7 @@ function User() {
         }
       );
 
-      setMessage('Shipment sent successfully');
+      setMessage('Başarıyla gönderildi');
       setFormData({ station_id: '', cargo_count: '', cargo_weight_kg: '' });
       loadMyCargos();
       setTimeout(() => setMessage(''), 3000);
@@ -339,11 +339,11 @@ function User() {
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Station</th>
-                  <th>Items</th>
-                  <th>Weight (kg)</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th>İstasyon</th>
+                  <th>Parça</th>
+                  <th>Kilo (kg)</th>
+                  <th>Durum</th>
+                  <th>Kontrol et</th>
                 </tr>
               </thead>
               <tbody>
@@ -435,5 +435,6 @@ function User() {
     </div>
   );
 }
+
 
 export default User;
