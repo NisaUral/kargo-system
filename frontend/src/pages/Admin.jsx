@@ -429,19 +429,25 @@ function Admin() {
       const totalWeight = cargos.reduce((sum, c) => sum + c.cargo_weight_kg, 0);
       const totalCount = cargos.reduce((sum, c) => sum + c.cargo_count, 0);
 
-      let selectedType = 'unlimited';
+      let selectedType = problemType;
       let reason = '';
 
-      if (totalWeight <= 2250) {
-        selectedType = 'fixed-3';
-        reason = `Toplam ağırlık ${totalWeight}kg ≤ 2250kg (3 araç yeterli)`;
-      } else if (totalWeight <= 3000) {
-        selectedType = 'fixed-4';
-        reason = `Toplam ağırlık ${totalWeight}kg > 2250kg (4 araç gerekli)`;
-      } else {
-        selectedType = 'unlimited';
-        reason = `Toplam ağırlık ${totalWeight}kg > 3000kg (Sınırsız araç)`;
-      }
+      if (problemType === 'auto') {
+  if (totalWeight <= 2250) {
+    selectedType = 'fixed-3';
+    reason = `Toplam ağırlık ${totalWeight}kg ≤ 2250kg (3 araç yeterli)`;
+  } else if (totalWeight <= 3000) {
+    selectedType = 'fixed-4';
+    reason = `Toplam ağırlık ${totalWeight}kg > 2250kg (4 araç gerekli)`;
+  } else {
+    selectedType = 'unlimited';
+    reason = `Toplam ağırlık ${totalWeight}kg > 3000kg (Sınırsız araç)`;
+  }
+} else {
+  // Admin'in seçtiği tipe göre
+  reason = `Admin Seçimi: ${problemType === 'fixed-3' ? '3 Araç' : problemType === 'fixed-4' ? '4 Araç' : 'Unlimited Mode'}`;
+  selectedType = problemType;
+}
 
       console.log(` Otomatik analiz: ${reason}`);
 
@@ -585,18 +591,39 @@ function Admin() {
         <div className="header">
           <h1>Kargo İşletme Sistemi - Admin Paneli</h1>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button 
-              className="btn btn-success" 
-              onClick={calculateRoutes}
-              disabled={loading}
-            >
-              {loading ? ' Hesaplanıyor...' : ' Rota Planla'}
-            </button>
             
-            <button 
-              className="btn btn-info"
-              onClick={loadScenarioAnalysis}
-            >
+    <select 
+      value={problemType}
+      onChange={(e) => setProblemType(e.target.value)}
+      style={{
+        padding: '8px 12px',
+        borderRadius: '4px',
+        border: '2px solid #2c3e50',
+        backgroundColor: '#ecf0f1',
+        color: '#2c3e50',
+        fontWeight: 'bold',
+        cursor: 'pointer',
+        fontSize: '14px'
+      }}
+    >
+      <option value="auto"> Otomatik Seçim</option>
+      <option value="fixed-3"> Sınırlı Araç - 3 Araç</option>
+      <option value="fixed-4"> Sınırlı Araç - 4 Araç</option>
+      <option value="unlimited"> Sınırsız Araç Problemi - Dinamik</option>
+    </select>
+
+    <button 
+      className="btn btn-success" 
+      onClick={calculateRoutes}
+      disabled={loading}
+    >
+      {loading ? '⏳ Hesaplanıyor...' : ' Rota Planla'}
+    </button>
+    
+    <button 
+      className="btn btn-info"
+      onClick={loadScenarioAnalysis}
+    >
                Senaryo Analizi
             </button>
             <button 
