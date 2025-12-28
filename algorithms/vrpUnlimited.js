@@ -20,24 +20,28 @@ class UnlimitedVehicleVRP {
   }
 
   //  CARGO SPLITTING - Her istasyonun kargosunu parçalara böl
-  splitCargoByStation() {
-    const splitCargo = {};
+  //  CARGO SPLITTING - Her istasyonun kargosunu parçalara böl
+splitCargoByStation() {
+  const splitCargo = {};
+  
+  Object.entries(this.cargoByStation).forEach(([stationId, cargo]) => {
+    // ✅ İTEM AĞIRLIĞINI TAMSAYI OLARAk HESAPLA
+    const itemWeight = Math.round((cargo.totalWeight / cargo.totalCount) * 100) / 100;  // 2 ondalık
     
-    Object.entries(this.cargoByStation).forEach(([stationId, cargo]) => {
-      const itemWeight = cargo.totalWeight / cargo.totalCount;  // Her item kaç kg
-      
-      splitCargo[stationId] = {
-        station: cargo.station,
-        totalCount: cargo.totalCount,
-        totalWeight: cargo.totalWeight,
-        itemWeight: itemWeight,  // Tek item ağırlığı
-        remainingItems: cargo.totalCount,  // Kalan kaç item
-        remainingWeight: cargo.totalWeight  // Kalan kaç kg
-      };
-    });
-    
-    return splitCargo;
-  }
+    splitCargo[stationId] = {
+      station: cargo.station,
+      totalCount: cargo.totalCount,
+      totalWeight: cargo.totalWeight,
+      itemWeight: itemWeight,  // Tek item ağırlığı
+      remainingItems: cargo.totalCount,  // Kalan kaç item
+      remainingWeight: cargo.totalWeight  // Kalan kaç kg
+    };
+
+    console.log(`[SPLIT] Station ${stationId}: ${cargo.totalWeight}kg / ${cargo.totalCount} items = ${itemWeight}kg/item`);
+  });
+  
+  return splitCargo;
+}
 
   //  AŞAMA 1: 2-OPT - Rota sırasını optimize et
   improve2Opt(stations) {
@@ -291,170 +295,188 @@ class UnlimitedVehicleVRP {
 
   //  PARÇA PARÇA KARGO EKLEME
   nearestNeighborRoute(startStationId, splitCargo, vehicle, stations) {
-    const startWeight = splitCargo[startStationId]?.remainingWeight || 0;
-    const itemWeight = splitCargo[startStationId]?.itemWeight || 0;
+  const itemWeight = splitCargo[startStationId]?.itemWeight || 0;
 
-    //  BAŞLANGIÇ BİR İTEM KAPASİTEYE SAĞLAMAZSA NULL DÖN
-    if (itemWeight > vehicle.capacity_kg) {
-      console.log(`[NN] ⚠️ Station ${startStationId}: 1 item ${itemWeight}kg > ${vehicle.capacity_kg}kg - BAŞLAYAMAZ!`);
-      return null;
-    }
-
-    const route = [startStationId];
-    let totalDistance = 0;
-    let totalWeight = 0;
-    let addedItems = 0;
-
-    //  BAŞLANGIÇ İSTASYONUNDAN KAPASITE DOLUSANA KADAR İTEM EKLE
-    while (
-      splitCargo[startStationId].remainingItems > 0 &&
-      totalWeight + splitCargo[startStationId].itemWeight <= vehicle.capacity_kg
-    ) {
-      const iWeight = splitCargo[startStationId].itemWeight;
-      totalWeight += iWeight;
-      addedItems += 1;
-      splitCargo[startStationId].remainingWeight -= iWeight;
-      splitCargo[startStationId].remainingItems -= 1;
-    }
-
-    console.log(`[NN] Starting with station ${startStationId}, weight: ${totalWeight}kg, items: ${addedItems}`);
-
-    //  KALAN İSTASYONLARDAN PARÇA PARÇA KARGO EKLE
-    let stationsProcessed = new Set([startStationId]);
-    let foundMore = true;
-
-    while (foundMore) {
-      foundMore = false;
-      let nearestStation = null;
-      let nearestDistance = Infinity;
-
-      // Tüm kargo istasyonlarını kontrol et
-      Object.keys(splitCargo).forEach(stationIdStr => {
-        const stationId = parseInt(stationIdStr);
-        
-        if (stationsProcessed.has(stationId)) return;
-        if (splitCargo[stationId].remainingItems === 0) return;
-
-        const station = stations.find(s => s.id === stationId);
-        const currentStation = stations.find(s => s.id === route[route.length - 1]);
-        
-        if (!station || !currentStation) return;
-
-        const currentIdx = stations.findIndex(s => s.id === route[route.length - 1]);
-        const nextIdx = stations.findIndex(s => s.id === stationId);
-        
-        if (currentIdx === -1 || nextIdx === -1) return;
-
-        const distance = this.distanceMatrix[currentIdx][nextIdx];
-        const iWeight = splitCargo[stationId].itemWeight;
-
-        // ✅ BİR İTEM KAPASİTEYE SAĞLARSA EKLE
-        if (totalWeight + iWeight <= vehicle.capacity_kg && distance < nearestDistance) {
-          nearestDistance = distance;
-          nearestStation = stationId;
-        }
-      });
-
-      // Uygun istasyon bulunduysa, 1 item ekle
-      if (nearestStation !== null) {
-        foundMore = true;
-        const iWeight = splitCargo[nearestStation].itemWeight;
-        
-        totalWeight += iWeight;
-        totalDistance += nearestDistance;
-        addedItems += 1;
-
-        //  KARGO BÖLMELERINDEN 1 İTEM ÇIKARt
-        splitCargo[nearestStation].remainingWeight -= iWeight;
-        splitCargo[nearestStation].remainingItems -= 1;
-
-        console.log(`[NN] Added 1 item from station ${nearestStation} (${iWeight}kg), total: ${totalWeight}kg, items: ${addedItems}`);
-
-        // Eğer istasyonun tüm kargosı biterse, rota listesine ekle
-        if (splitCargo[nearestStation].remainingItems === 0 && !route.includes(nearestStation)) {
-          route.push(nearestStation);
-          stationsProcessed.add(nearestStation);
-        }
-      }
-    }
-
-    // Üniversiteye dönüş
-    const lastStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
-    const returnDistance = haversineDistance(
-      this.stations[lastStationIdx].latitude,
-      this.stations[lastStationIdx].longitude,
-      this.university.latitude,
-      this.university.longitude
-    );
-    totalDistance += returnDistance;
-    route.push(0);
-
-    console.log(`[NN] Final route: ${route.join('->')}, weight: ${totalWeight}kg, items: ${addedItems}`);
-
-    //  2-OPT UYGULA
-    const optimized = this.improve2Opt(route);
-    const optimizedRoute = optimized.stations;
-    const optimizedDistance = optimized.distance;
-
-    console.log(`[NN] 2-OPT Orijinal: ${totalDistance.toFixed(2)}km → Optimize: ${optimizedDistance.toFixed(2)}km`);
-
-    return {
-      stations: optimizedRoute,
-      totalDistance: optimizedDistance,
-      totalWeight: parseInt(totalWeight),
-      itemsCount: addedItems,
-      capacity: vehicle.capacity_kg,
-      utilization: (parseInt(totalWeight) / vehicle.capacity_kg * 100).toFixed(1)
-    };
+  //  BAŞLANGIÇ BİR İTEM KAPASİTEYE SAĞLAMAZSA NULL DÖN
+  if (itemWeight > vehicle.capacity_kg) {
+    console.log(`[NN] ⚠️ Station ${startStationId}: 1 item ${itemWeight}kg > ${vehicle.capacity_kg}kg - BAŞLAYAMAZ!`);
+    return null;
   }
+
+  const route = [startStationId];
+  let totalDistance = 0;
+  let totalWeight = 0;
+  let addedItems = 0;
+
+  //  BAŞLANGIÇ İSTASYONUNDAN KAPASITE DOLUSANA KADAR İTEM EKLE
+  while (
+    splitCargo[startStationId].remainingItems > 0 &&
+    totalWeight + splitCargo[startStationId].itemWeight <= vehicle.capacity_kg
+  ) {
+    const iWeight = splitCargo[startStationId].itemWeight;
+    totalWeight += iWeight;
+    addedItems += 1;
+    splitCargo[startStationId].remainingWeight -= iWeight;
+    splitCargo[startStationId].remainingItems -= 1;
+  }
+
+  console.log(`[NN] Starting with station ${startStationId}, weight: ${totalWeight}/${vehicle.capacity_kg}kg, items: ${addedItems}`);
+
+  // ✅ EĞER HIÇBIR İTEM EKLEYEMEDİYSE NULL DÖN
+  if (addedItems === 0) {
+    console.log(`[NN] ⚠️ Station ${startStationId}: Hiçbir item eklenemedi!`);
+    return null;
+  }
+
+  //  KALAN İSTASYONLARDAN PARÇA PARÇA KARGO EKLE
+ let foundMore = true;
+
+while (foundMore) {
+  foundMore = false;
+  let nearestStation = null;
+  let nearestDistance = Infinity;
+
+  // Tüm kargo istasyonlarını kontrol et
+  Object.keys(splitCargo).forEach(stationIdStr => {
+    const stationId = parseInt(stationIdStr);
+    
+    // ✅ KALAN ITEM KONTROL ET
+    if (splitCargo[stationId].remainingItems === 0) return;
+    
+    // ✅ BAŞLANGIÇ STATION'U TEKRAR SEÇME! KAPASITEDE YER VARSA SEÇEBILIR AMA...
+    // İlk başta başlangıç istasyonundan aldığımız item sayısını kontrol et
+    if (stationId === startStationId && addedItems > 0) {
+      // Zaten başlangıçta item aldık, şimdi başka istasyonlardan seçelim
+      return;
+    }
+
+    const station = this.stations.find(s => s.id === stationId);
+    if (!station) return;
+
+    const currentIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
+    const nextIdx = this.stations.findIndex(s => s.id === stationId);
+    
+    if (currentIdx === -1 || nextIdx === -1) return;
+
+    const distance = this.distanceMatrix[currentIdx][nextIdx];
+    const iWeight = splitCargo[stationId].itemWeight;
+
+    // ✅ BİR İTEM KAPASİTEYE SAĞLARSA, EN YAKIN'I SEÇ
+    if (totalWeight + iWeight <= vehicle.capacity_kg && distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestStation = stationId;
+    }
+  });
+
+  // Uygun istasyon bulunduysa, 1 item ekle
+  if (nearestStation !== null) {
+    const iWeight = splitCargo[nearestStation].itemWeight;
+    
+    if (totalWeight + iWeight > vehicle.capacity_kg) {
+      console.log(`[NN] ⚠️ Kapasite aşılacak! ${totalWeight}kg + ${iWeight}kg > ${vehicle.capacity_kg}kg`);
+      break;
+    }
+
+    foundMore = true;
+    
+    totalWeight += iWeight;
+    totalDistance += nearestDistance;
+    addedItems += 1;
+
+    splitCargo[nearestStation].remainingWeight -= iWeight;
+    splitCargo[nearestStation].remainingItems -= 1;
+
+    console.log(`[NN] ✅ Added 1 item from station ${nearestStation} (${iWeight}kg), total: ${totalWeight}kg/${vehicle.capacity_kg}kg`);
+
+    if (splitCargo[nearestStation].remainingItems === 0 && !route.includes(nearestStation)) {
+      route.push(nearestStation);
+    }
+  }
+}
+
+// ✅ BAŞLANGIÇ STATION'UN HENÜz İTEM'İ KALDIYSA, ROTAYA EKLE
+if (splitCargo[startStationId].remainingItems > 0 && !route.includes(startStationId)) {
+  route.push(startStationId);
+  console.log(`[NN] ✅ Station ${startStationId} halen kargo var, rotaya eklendi`);
+}
+
+  // Üniversiteye dönüş
+  const lastStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
+  const returnDistance = haversineDistance(
+    this.stations[lastStationIdx].latitude,
+    this.stations[lastStationIdx].longitude,
+    this.university.latitude,
+    this.university.longitude
+  );
+  totalDistance += returnDistance;
+  route.push(0);
+
+  console.log(`[NN] Final route: ${route.join('->')}, weight: ${totalWeight}kg, items: ${addedItems}`);
+
+  //  2-OPT UYGULA
+  const optimized = this.improve2Opt(route);
+  const optimizedRoute = optimized.stations;
+  const optimizedDistance = optimized.distance;
+
+  console.log(`[NN] 2-OPT Orijinal: ${totalDistance.toFixed(2)}km → Optimize: ${optimizedDistance.toFixed(2)}km`);
+
+  return {
+    stations: optimizedRoute,
+    totalDistance: optimizedDistance,
+    totalWeight: parseInt(totalWeight),
+    itemsCount: addedItems,
+    capacity: vehicle.capacity_kg,
+    utilization: (parseInt(totalWeight) / vehicle.capacity_kg * 100).toFixed(1)
+  };
+}
 
   selectOptimalStartingStation(splitCargo, vehicle) {
-    console.log('[START-OPT] Optimal başlangıç noktası aranıyor...');
+  console.log('[START-OPT] Optimal başlangıç noktası aranıyor...');
+  
+  //  HENÜz KARGOSu BİTMEMİŞ İSTASYONLARDAN SEÇ
+  const stationsWithCargo = Object.entries(splitCargo)
+    .filter(([_, cargo]) => cargo.remainingItems > 0)  // ✅ splitCargo'yu kullan!
+    .map(([id, _]) => parseInt(id));
+
+  if (stationsWithCargo.length === 0) {
+    console.log('[START-OPT]  Kargo bitmedi!');
+    return null;
+  }
+
+  let bestStation = stationsWithCargo[0];
+  let bestScore = Infinity;
+
+  stationsWithCargo.forEach(stationId => {
+    const station = this.stations.find(s => s.id === stationId);
     
-    //  HENÜz KARGOSu BİTMEMİŞ İSTASYONLARDAN SEÇ
-    const stationsWithCargo = Object.entries(splitCargo)
-      .filter(([_, cargo]) => cargo.remainingItems > 0)
-      .map(([id, _]) => parseInt(id));
-
-    if (stationsWithCargo.length === 0) {
-      console.log('[START-OPT]  Kargo bitmedi!');
-      return null;
-    }
-
-    let bestStation = stationsWithCargo[0];
-    let bestScore = Infinity;
-
-    stationsWithCargo.forEach(stationId => {
-      const station = this.stations.find(s => s.id === stationId);
-      
-      const distToUni = this.getDistanceFromUniversity(station);
-      const cargoWeight = splitCargo[stationId]?.remainingWeight || 0;
-      
-      let avgDistToOthers = 0;
-      const otherStations = stationsWithCargo.filter(s => s !== stationId);
-      otherStations.forEach(otherId => {
-        const otherStation = this.stations.find(s => s.id === otherId);
-        if (otherStation) {
-          const idx1 = this.stations.findIndex(s => s.id === stationId);
-          const idx2 = this.stations.findIndex(s => s.id === otherId);
-          avgDistToOthers += this.distanceMatrix[idx1][idx2];
-        }
-      });
-      if (otherStations.length > 0) {
-        avgDistToOthers /= otherStations.length;
-      }
-
-      const score = (distToUni * 0.3) + (avgDistToOthers * 0.4) - (cargoWeight * 0.3);
-
-      if (score < bestScore) {
-        bestScore = score;
-        bestStation = stationId;
+    const distToUni = this.getDistanceFromUniversity(station);
+    const cargoWeight = splitCargo[stationId]?.remainingWeight || 0;  // ✅ remainingWeight!
+    
+    let avgDistToOthers = 0;
+    const otherStations = stationsWithCargo.filter(s => s !== stationId);
+    otherStations.forEach(otherId => {
+      const otherStation = this.stations.find(s => s.id === otherId);
+      if (otherStation) {
+        const idx1 = this.stations.findIndex(s => s.id === stationId);
+        const idx2 = this.stations.findIndex(s => s.id === otherId);
+        avgDistToOthers += this.distanceMatrix[idx1][idx2];
       }
     });
+    if (otherStations.length > 0) {
+      avgDistToOthers /= otherStations.length;
+    }
 
-    console.log(`[START-OPT] ✅ Seçilen başlangıç: Station ${bestStation}`);
-    return bestStation;
-  }
+    const score = (distToUni * 0.3) + (avgDistToOthers * 0.4) - (cargoWeight * 0.3);
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestStation = stationId;
+    }
+  });
+
+  console.log(`[START-OPT] ✅ Seçilen başlangıç: Station ${bestStation} (Kalan: ${splitCargo[bestStation]?.remainingItems} item)`);
+  return bestStation;
+}
 
   //  ANA ALGORITMA - CARGO SPLITTING İLE
   solve() {
@@ -471,146 +493,200 @@ class UnlimitedVehicleVRP {
     console.log(`[SOLVE] Toplam ağırlık: ${Object.values(splitCargo).reduce((sum, c) => sum + c.totalWeight, 0)}kg`);
 
     //  KARGO BİTMEYİ DÖNGÜ
-    while (Object.values(splitCargo).some(cargo => cargo.remainingItems > 0)) {
-      //  HENÜz KARGOSu BİTMEMİŞ İSTASYONLAR
-      const stationsWithCargo = Object.keys(splitCargo)
-        .filter(stationId => splitCargo[stationId].remainingItems > 0)
-        .map(id => parseInt(id));
+while (Object.values(splitCargo).some(cargo => cargo.remainingItems > 0)) {
+  const stationsWithCargo = Object.keys(splitCargo)
+    .filter(stationId => splitCargo[stationId].remainingItems > 0)
+    .map(id => parseInt(id));
 
-      if (stationsWithCargo.length === 0) {
-        console.log(`[SOLVE] ✔️ Tüm kargolar dağıtıldı!`);
-        break;
-      }
+  if (stationsWithCargo.length === 0) {
+    console.log(`[SOLVE] ✔️ Tüm kargolar dağıtıldı!`);
+    break;
+  }
 
-      //  YENİ ARAÇ GEREKLİYSE KİRA
-      if (vehicleIdx >= vehiclesToUse.length) {
-        //  KALAN KARGO AĞIRLIĞINI HESAPLA
-        const remainingWeight = Object.values(splitCargo)
-          .filter(c => c.remainingItems > 0)
-          .reduce((sum, c) => sum + c.remainingWeight, 0);
+  // ✅ YENİ ARAÇ GEREKLİYSE KİRA (LOOP İÇİNDE!)
+  if (vehicleIdx >= vehiclesToUse.length) {
+    const remainingWeight = Object.values(splitCargo)
+      .filter(c => c.remainingItems > 0)
+      .reduce((sum, c) => sum + c.remainingWeight, 0);
 
-        //  KİRALANDI ARACIN KAPASİTESİ = KALAN KARGO + %10 BUFFER
-        const rentalCapacity = Math.ceil(remainingWeight * 1.1);
+    console.log(`[SOLVE] ⚠️ Araç ${vehicleIdx + 1} yok! ${remainingWeight.toFixed(0)}kg kargo için ek araç kiralınıyor...`);
+    
+    const newVehicle = {
+      id: 100 + newVehiclesRented,
+      name: `Kiralandı Araç ${newVehiclesRented + 1}`,
+      capacity_kg: 500,  // ✅ HER KIRALANACAK ARAÇ 500KG!
+      fuel_consumption: 0,
+      rental_cost: this.costs.rental_cost_new_vehicle,
+      isRented: true
+    };
+    vehiclesToUse.push(newVehicle);
+    newVehiclesRented++;
+    console.log(`[SOLVE]  Ek araç kiralandı: ${newVehicle.name} (500kg)`);
+  }
 
-        const newVehicle = {
-          id: 100 + newVehiclesRented,
-          name: `Kiralandı Araç ${newVehiclesRented + 1}`,
-          capacity_kg: rentalCapacity,  //  DINAMIK KAPASİTE
-          fuel_consumption: 0,
-          rental_cost: this.costs.rental_cost_new_vehicle,
-          isRented: true
-        };
-        vehiclesToUse.push(newVehicle);
-        newVehiclesRented++;
-        console.log(`[SOLVE]  Yeni araç kiralandı: ${newVehicle.name} (${rentalCapacity}kg kapasite, kalan kargo: ${remainingWeight}kg)`);
-      }
+  const currentVehicle = vehiclesToUse[vehicleIdx];
+  const remainingWeight = Object.values(splitCargo)
+    .filter(c => c.remainingItems > 0)
+    .reduce((sum, c) => sum + c.remainingWeight, 0);
 
-      const currentVehicle = vehiclesToUse[vehicleIdx];
-      const remainingWeight = Object.values(splitCargo)
-        .filter(c => c.remainingItems > 0)
-        .reduce((sum, c) => sum + c.remainingWeight, 0);
+  console.log(`\n[SOLVE]  Araç ${vehicleIdx + 1} (ID=${currentVehicle.id}): Cap=${currentVehicle.capacity_kg}kg, Kalan=${Math.round(remainingWeight)}kg`);
 
-      console.log(`\n[SOLVE]  Araç ${vehicleIdx} (ID=${currentVehicle.id}): Cap=${currentVehicle.capacity_kg}kg, Kalan=${remainingWeight}kg`);
+  const startingStation = this.selectOptimalStartingStation(splitCargo, currentVehicle);
+  
+  if (!startingStation) {
+    console.log(`[SOLVE]  Başlangıç istasyonu bulunamadı!`);
+    vehicleIdx++;
+    continue;
+  }
 
-      //  OPTIMAL BAŞLANGIÇ SEÇ
-      const startingStation = this.selectOptimalStartingStation(splitCargo, currentVehicle);
-      
-      if (!startingStation) {
-        console.log(`[SOLVE]  Başlangıç istasyonu bulunamadı!`);
-        vehicleIdx++;
-        continue;
-      }
+  const route = this.nearestNeighborRoute(
+    startingStation,
+    splitCargo,  
+    currentVehicle,
+    this.stations
+  );
 
-      //  PARÇA PARÇA KARGO EKLEME
-      const route = this.nearestNeighborRoute(
-        startingStation,
-        splitCargo,  
-        currentVehicle,
-        this.stations
-      );
+  if (!route) {
+    console.log(`[SOLVE]  Rota oluşturulamadı, sonraki araçla dene...`);
+    vehicleIdx++;
+    continue;
+  }
 
-      if (!route) {
-        console.log(`[SOLVE]  Rota oluşturulamadı, sonraki araçla dene...`);
-        vehicleIdx++;
-        continue;
-      }
+  console.log(`[SOLVE]  Bu rota: ${route.stations.join('->')}, Weight=${route.totalWeight}kg, Items=${route.itemsCount}`);
 
-      //  SPLITCARGO'YU GÜNCELLE (o araçta taşınanlar)
-      const usedStations = route.stations.filter(s => s !== 0);
-      for (const stationId of usedStations) {
-        if (splitCargo[stationId].remainingItems > 0) {
-          console.log(`[SOLVE] Station ${stationId}: ${splitCargo[stationId].remainingItems} item kaldı`);
-          // Kalan itemler sonraki araçla taşınacak
-        }
-      }
+  const fuelCost = route.totalDistance * this.costs.fuel_price_per_liter;
+  const distanceCost = route.totalDistance * this.costs.km_cost;
+  const rentalCost = currentVehicle.isRented ? this.costs.rental_cost_new_vehicle : 0;
+  const totalRouteCost = fuelCost + distanceCost + rentalCost;
 
-      console.log(`[SOLVE]  Bu rota: ${route.stations.join('->')}, Weight=${route.totalWeight}kg, Items=${route.itemsCount}`);
+  allRoutes.push({
+    vehicleId: currentVehicle.id,
+    vehicleName: currentVehicle.name,
+    isRented: currentVehicle.isRented || false,
+    stations: route.stations,
+    totalDistance: route.totalDistance.toFixed(2),
+    totalWeight: parseInt(route.totalWeight),
+    itemsCount: route.itemsCount,
+    capacity: route.capacity,
+    utilization: route.utilization,
+    fuelCost: fuelCost.toFixed(2),
+    distanceCost: distanceCost.toFixed(2),
+    rentalCost: rentalCost,
+    totalCost: totalRouteCost.toFixed(2)
+  });
 
-      //  MALIYET HESABI
-      const fuelCost = route.totalDistance * this.costs.fuel_price_per_liter;
-      const distanceCost = route.totalDistance * this.costs.km_cost;
-      const rentalCost = currentVehicle.isRented ? this.costs.rental_cost_new_vehicle : 0;
-      const totalRouteCost = fuelCost + distanceCost + rentalCost;
+  totalCost += totalRouteCost;
+  vehicleIdx++;  // ✅ SONRAKI ARAÇLA DEVAM ET
+}
 
-      allRoutes.push({
-        vehicleId: currentVehicle.id,
-        vehicleName: currentVehicle.name,
-        isRented: currentVehicle.isRented || false,
-        stations: route.stations,
-        totalDistance: route.totalDistance.toFixed(2),
-        totalWeight: parseInt(route.totalWeight),
-        itemsCount: route.itemsCount,
-        capacity: route.capacity,
-        utilization: route.utilization,
-        fuelCost: fuelCost.toFixed(2),
-        distanceCost: distanceCost.toFixed(2),
-        rentalCost: rentalCost,
-        totalCost: totalRouteCost.toFixed(2)
-      });
+//  AŞAMA 2: SAVINGS OPTIMIZATION
+console.log(`\n[SOLVE] Savings optimization uygulanıyor...`);
+allRoutes = this.optimizeWithSavings(allRoutes);
 
-      totalCost += totalRouteCost;
-      vehicleIdx++;
-    }
+//  AŞAMA 3: MALIYET-BASED OPTIMIZATION
+console.log(`\n[SOLVE] Maliyet-based optimization uygulanıyor...`);
+allRoutes = this.optimizeExpensiveRoutes(allRoutes);
 
-    //  AŞAMA 2: SAVINGS OPTIMIZATION
-    console.log(`\n[SOLVE] Savings optimization uygulanıyor...`);
-    allRoutes = this.optimizeWithSavings(allRoutes);
+this.checkRouteEfficiency(allRoutes);
 
-    //  AŞAMA 3: MALIYET-BASED OPTIMIZATION
-    console.log(`\n[SOLVE] Maliyet-based optimization uygulanıyor...`);
-    allRoutes = this.optimizeExpensiveRoutes(allRoutes);
+// ✅ LOOP SONRASI KARGO KONTROLÜ - DOĞRU HESAPLA
+const remainingCargoCheck = Object.values(splitCargo)
+  .filter(c => c.remainingItems > 0)
+  .reduce((sum, c) => sum + c.remainingWeight, 0);
 
-    this.checkRouteEfficiency(allRoutes);
+console.log(`\n[SOLVE] ⏩ Loop sonrası kargo kontrolü: ${remainingCargoCheck.toFixed(0)}kg kaldı`);
 
-    // Maliyetleri yeniden hesapla
-    totalCost = 0;
-    allRoutes.forEach(route => {
-      const fuelCost = parseFloat(route.totalDistance) * this.costs.fuel_price_per_liter;
-      const distanceCost = parseFloat(route.totalDistance) * this.costs.km_cost;
-      const rentalCost = route.isRented ? this.costs.rental_cost_new_vehicle : 0;
-      route.totalCost = (fuelCost + distanceCost + rentalCost).toFixed(2);
-      totalCost += parseFloat(route.totalCost);
+// ✅ EĞER HENÜz KARGO KALMIŞSA, YENİ ARAÇ KİRALA VE DAĞIT
+if (remainingCargoCheck > 0) {
+  console.log(`[SOLVE] ⚠️ ${remainingCargoCheck.toFixed(0)}kg kargo halen kaldı! Ek araç kiralınıyor...`);
+  
+  const rentalCapacity = Math.ceil(remainingCargoCheck * 1.05);
+  const newVehicle = {
+    id: 100 + newVehiclesRented,
+    name: `Kiralandı Araç ${newVehiclesRented + 1}`,
+    capacity_kg: rentalCapacity,
+    fuel_consumption: 0,
+    rental_cost: this.costs.rental_cost_new_vehicle,
+    isRented: true
+  };
+  vehiclesToUse.push(newVehicle);
+  newVehiclesRented++;
+  console.log(`[SOLVE]  Yeni araç kiralandı: ${newVehicle.name} (${rentalCapacity}kg)`);
+  
+  // ✅ KALAN KARGOLAR İÇİN ROTA OLUŞTUR
+  while (Object.values(splitCargo).some(c => c.remainingItems > 0)) {
+    const startingStation = this.selectOptimalStartingStation(splitCargo, newVehicle);
+    
+    if (!startingStation) break;
+
+    const route = this.nearestNeighborRoute(
+      startingStation,
+      splitCargo,
+      newVehicle,
+      this.stations
+    );
+
+    if (!route) break;
+
+    console.log(`[SOLVE]  Ek araç rota: ${route.stations.join('->')}, Weight=${route.totalWeight}kg`);
+
+    const fuelCost = route.totalDistance * this.costs.fuel_price_per_liter;
+    const distanceCost = route.totalDistance * this.costs.km_cost;
+    const rentalCost = this.costs.rental_cost_new_vehicle;
+    const totalRouteCost = fuelCost + distanceCost + rentalCost;
+
+    allRoutes.push({
+      vehicleId: newVehicle.id,
+      vehicleName: newVehicle.name,
+      isRented: true,
+      stations: route.stations,
+      totalDistance: route.totalDistance.toFixed(2),
+      totalWeight: parseInt(route.totalWeight),
+      itemsCount: route.itemsCount,
+      capacity: route.capacity,
+      utilization: route.utilization,
+      fuelCost: fuelCost.toFixed(2),
+      distanceCost: distanceCost.toFixed(2),
+      rentalCost: rentalCost,
+      totalCost: totalRouteCost.toFixed(2)
     });
 
-    return {
-      routes: allRoutes,
-      totalCost: totalCost.toFixed(2),
-      vehiclesUsed: allRoutes.length,
-      newVehiclesRented,
-      rentalVehicles: vehiclesToUse
-        .filter(v => v.isRented)
-        .map(v => ({
-          id: v.id,
-          name: v.name,
-          capacity_kg: v.capacity_kg,
-          rental_cost: v.rental_cost
-        })),
-      summary: {
-        totalDistance: allRoutes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0).toFixed(2),
-        totalWeight: allRoutes.reduce((sum, r) => sum + r.totalWeight, 0),
-        averageCostPerVehicle: allRoutes.length > 0 ? (totalCost / allRoutes.length).toFixed(2) : 0
-      }
-    };
+    totalCost += totalRouteCost;
+  }
+
+  console.log(`[SOLVE] ✅ Ek araç kullanıldı!`);
+}
+
+// Maliyetleri yeniden hesapla
+totalCost = 0;
+allRoutes.forEach(route => {
+  const fuelCost = parseFloat(route.totalDistance) * this.costs.fuel_price_per_liter;
+  const distanceCost = parseFloat(route.totalDistance) * this.costs.km_cost;
+  const rentalCost = route.isRented ? this.costs.rental_cost_new_vehicle : 0;
+  route.totalCost = (fuelCost + distanceCost + rentalCost).toFixed(2);
+  totalCost += parseFloat(route.totalCost);
+});
+
+return {
+  routes: allRoutes,
+  totalCost: totalCost.toFixed(2),
+  vehiclesUsed: allRoutes.length,
+  newVehiclesRented,
+  rentalVehicles: vehiclesToUse
+    .filter(v => v.isRented)
+    .map(v => ({
+      id: v.id,
+      name: v.name,
+      capacity_kg: v.capacity_kg,
+      rental_cost: v.rental_cost
+    })),
+  summary: {
+    totalDistance: allRoutes.reduce((sum, r) => sum + parseFloat(r.totalDistance), 0).toFixed(2),
+    totalWeight: allRoutes.reduce((sum, r) => sum + r.totalWeight, 0),
+    averageCostPerVehicle: allRoutes.length > 0 ? (totalCost / allRoutes.length).toFixed(2) : 0
+  }
+};
+
   }
 }
 

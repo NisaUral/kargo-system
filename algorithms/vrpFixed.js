@@ -48,79 +48,89 @@ class FixedVehicleVRP {
   }
 
   nearestNeighborRoute(startStationId, availableStations, vehicle) {
-    const route = [startStationId];
-    const visited = new Set([startStationId]);
-    let totalDistance = 0;
-    let totalWeight = parseInt(this.cargoByStation[startStationId]?.totalWeight) || 0;
+  const startWeight = parseInt(this.cargoByStation[startStationId]?.totalWeight) || 0;
+  
+  if (startWeight > vehicle.capacity_kg) {
+    console.log(`[NN-FIXED] ⚠️ Station ${startStationId}: ${startWeight}kg > ${vehicle.capacity_kg}kg - BAŞLAYAMAZ!`);
+    return null;
+  }
 
-    console.log(`[NN-FIXED] Starting with station ${startStationId}, weight: ${totalWeight}`);
+  const route = [startStationId];
+  const visited = new Set([startStationId]);
+  let totalDistance = 0;
+  let totalWeight = startWeight;
 
-    while (availableStations.length > 0) {
-      let nearestStation = null;
-      let nearestDistance = Infinity;
-      let nearestIdx = -1;
-      const currentStationId = route[route.length - 1];
+  console.log(`[NN-FIXED] Starting with station ${startStationId}, weight: ${totalWeight}/${vehicle.capacity_kg}kg`);
 
-      for (let i = 0; i < availableStations.length; i++) {
-        const stationId = availableStations[i];
-        
-        if (visited.has(stationId) || stationId === currentStationId) {
-          continue;
-        }
-        
-        const currentStationIdx = this.stations.findIndex(s => s.id === currentStationId);
-        const nextStationIdx = this.stations.findIndex(s => s.id === stationId);
-        
-        if (currentStationIdx === -1 || nextStationIdx === -1) {
-          continue;
-        }
-        
-        const distance = this.distanceMatrix[currentStationIdx][nextStationIdx];
-        const cargoWeight = parseInt(this.cargoByStation[stationId]?.totalWeight) || 0;
-        const potentialWeight = totalWeight + cargoWeight;
+  // ✅ COPY'SINI AL, ORIJINALINI DEĞİŞTİRME!
+  const remainingStations = [...availableStations];
 
-        if (potentialWeight <= vehicle.capacity_kg && distance < nearestDistance) {
-          nearestDistance = distance;
-          nearestStation = stationId;
-          nearestIdx = i;
-        }
+  while (remainingStations.length > 0) {
+    let nearestStation = null;
+    let nearestDistance = Infinity;
+    let nearestIdx = -1;
+    const currentStationId = route[route.length - 1];
+
+    for (let i = 0; i < remainingStations.length; i++) {
+      const stationId = remainingStations[i];
+      
+      if (visited.has(stationId) || stationId === currentStationId) {
+        continue;
       }
-
-      if (nearestStation === null) {
-        console.log(`[NN-FIXED] Kapasite dolu. ${availableStations.length} istasyon kaldı.`);
-        break;
+      
+      const currentStationIdx = this.stations.findIndex(s => s.id === currentStationId);
+      const nextStationIdx = this.stations.findIndex(s => s.id === stationId);
+      
+      if (currentStationIdx === -1 || nextStationIdx === -1) {
+        continue;
       }
+      
+      const distance = this.distanceMatrix[currentStationIdx][nextStationIdx];
+      const cargoWeight = parseInt(this.cargoByStation[stationId]?.totalWeight) || 0;
+      const potentialWeight = totalWeight + cargoWeight;
 
-      visited.add(nearestStation);
-      route.push(nearestStation);
-      totalDistance += nearestDistance;
-      totalWeight += parseInt(this.cargoByStation[nearestStation].totalWeight) || 0;
-
-      availableStations.splice(nearestIdx, 1);
+      if (potentialWeight <= vehicle.capacity_kg && distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestStation = stationId;
+        nearestIdx = i;
+      }
     }
 
-    const lastStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
-    const returnDistance = haversineDistance(
-      this.stations[lastStationIdx].latitude,
-      this.stations[lastStationIdx].longitude,
-      this.university.latitude,
-      this.university.longitude
-    );
-    totalDistance += returnDistance;
+    if (nearestStation === null) {
+      console.log(`[NN-FIXED] ⚠️ Kapasite dolu! ${remainingStations.length} istasyon kaldı. (${totalWeight}/${vehicle.capacity_kg}kg)`);
+      break;
+    }
 
-    route.push(0);
+    visited.add(nearestStation);
+    route.push(nearestStation);
+    totalDistance += nearestDistance;
+    totalWeight += parseInt(this.cargoByStation[nearestStation].totalWeight) || 0;
 
-    
-    // Kalan istasyonlar zaten availableStations'ta kalıyor, solve() içinde başka araca atanacak
+    console.log(`[NN-FIXED] ✅ Added station ${nearestStation} (${parseInt(this.cargoByStation[nearestStation].totalWeight) || 0}kg), total: ${totalWeight}/${vehicle.capacity_kg}kg`);
 
-    return {
-      stations: route,
-      totalDistance,
-      totalWeight: parseInt(totalWeight),
-      capacity: vehicle.capacity_kg,
-      utilization: (parseInt(totalWeight) / vehicle.capacity_kg * 100).toFixed(1)
-    };
+    // ✅ COPY'DEN ÇIKAR
+    remainingStations.splice(nearestIdx, 1);
   }
+
+  const lastStationIdx = this.stations.findIndex(s => s.id === route[route.length - 1]);
+  const returnDistance = haversineDistance(
+    this.stations[lastStationIdx].latitude,
+    this.stations[lastStationIdx].longitude,
+    this.university.latitude,
+    this.university.longitude
+  );
+  totalDistance += returnDistance;
+
+  route.push(0);
+
+  return {
+    stations: route,
+    totalDistance,
+    totalWeight: parseInt(totalWeight),
+    capacity: vehicle.capacity_kg,
+    utilization: (parseInt(totalWeight) / vehicle.capacity_kg * 100).toFixed(1)
+  };
+}
 
   selectOptimalStartingStation(availableStations) {
     console.log('[START-OPT-FIXED] Optimal başlangıç noktası aranıyor...');
@@ -211,6 +221,11 @@ class FixedVehicleVRP {
         stationsForRoute,  
         currentVehicle
       );
+
+      if (!route) {
+  console.log(`[FIXED] ⚠️ Araç ${vehicleIdx + 1}: Kapasite yetersiz - rota oluşturulamadı!`);
+  continue;  // ← SONRAKI ARAÇLA DEVAM ET
+}
 
       const usedStations = route.stations.filter(s => s !== 0);
 
